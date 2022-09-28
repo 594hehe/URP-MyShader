@@ -76,7 +76,7 @@ Shader "Toon/URP_Toon"
         _OutlineWidth ("Outline Width", Range(0, 2)) = 0.5
         _OutlineColor ("Outline Color", Color) = (0, 0, 0, 1)
 		
-		 [Toggle]_ENABLE_ALPHA_TEST("Enable AlphaTest",float)=0
+		 [Toggle(ENABLE_ALPHA_CLIPPING)]_EnableAlphaClipping ("EnableAlphaClipping", Float) = 0
         _Cutoff("Cutoff", Range(0,1)) = 0.5
     }
     SubShader
@@ -87,6 +87,7 @@ Shader "Toon/URP_Toon"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
         #pragma shader_feature _SHADERENUM_BASE _SHADERENUM_HAIR _SHADERENUM_FACE
+		#pragma shader_feature_local_fragment ENABLE_ALPHA_CLIPPING
 		
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
@@ -148,7 +149,7 @@ Shader "Toon/URP_Toon"
        
         half _OutlineWidth;
         half4 _OutlineColor;
-		float _Cutoff;
+		half _Cutoff;
 		
         CBUFFER_END
 
@@ -169,16 +170,24 @@ Shader "Toon/URP_Toon"
             float3 worldBiTangent : TEXCOORD4;  //世界空间副切线
             half4 color : COLOR0;               //平滑Rim所需顶点色
         };
+		
+		
         ENDHLSL
 
         Pass
         {
             Tags {"LightMode"="UniversalForward" "RenderType"="Opaque"}
+			
+			Cull off
+            ZTest LEqual
+            ZWrite On
+            Blend One Zero
             
             HLSLPROGRAM
 			#pragma target 3.0
             #pragma vertex ToonPassVert
             #pragma fragment ToonPassFrag
+			#pragma shader_feature_local_fragment ENABLE_ALPHA_CLIPPING
 			#pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
 			
 			
@@ -202,7 +211,7 @@ Shader "Toon/URP_Toon"
             {
                 float4 BaseColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv) * _MainColor;
 				
-				#if _ENABLE_ALPHA_TEST_ON
+				#if ENABLE_ALPHA_CLIPPING
                     clip(BaseColor.a-_Cutoff);
                 #endif
 				
@@ -386,6 +395,8 @@ Shader "Toon/URP_Toon"
 	         HLSLPROGRAM
 	        #pragma vertex vert  
 	         #pragma fragment frag
+			 #pragma fragment FragmentAlphaClip
+			 #pragma shader_feature_local_fragment ENABLE_ALPHA_CLIPPING
 	          v2f vert(a2v input) {
                 float4 scaledScreenParams = GetScaledScreenParams();
                 float ScaleX = abs(scaledScreenParams.x / scaledScreenParams.y);//求得X因屏幕比例缩放的倍数
