@@ -26,7 +26,11 @@ Shader "Toon/URP_Toon"
         _ShadowSmooth ("Shadow Smooth", Range(0, 1)) = 0.5
         _RampShadowRange ("Ramp Shadow Range", Range(0.5, 1.0)) = 0.8
         _RangeAO ("AO Range", Range(0, 2)) = 1.5
-        _ShadowColor ("Shadow Color", Color) = (1.0, 1.0, 1.0, 1.0)
+       // _ShadowColor ("Shadow Color", Color) = (1.0, 1.0, 1.0, 1.0)
+		//_ShadowColor2 ("Shadow Color2", Color) = (1.0, 1.0, 1.0, 1.0)
+		//_ShadowColor3 ("Shadow Color3", Color) = (1.0, 1.0, 1.0, 1.0)
+		//_ShadowColor4 ("Shadow Color4", Color) = (1.0, 1.0, 1.0, 1.0)
+		//_ShadowColor5 ("Shadow Color5", Color) = (1.0, 1.0, 1.0, 1.0)
 		
 		
 		
@@ -53,7 +57,9 @@ Shader "Toon/URP_Toon"
         _StepSpecularGloss ("Step Specular Gloss", Range(0, 1)) = 0.5
         _StepSpecularIntensity ("Step Specular Intensity", Range(0, 2)) = 0.5
         _MetalSpecularGloss ("Metal Specular Gloss", Range(0, 1)) = 0.5
-        _MetalSpecularIntensity ("Metal Specular Intensity", Range(0, 1)) = 1
+        _MetalSpecularIntensity ("Metal Specular Intensity", Range(0, 5)) = 1
+		
+		
         [Space(30)]
 
         [Header(Rim Setting)]
@@ -67,9 +73,11 @@ Shader "Toon/URP_Toon"
 
         [Header(Outline Setting)]
         [Space(5)]
-        [Toggle] _EnableOutline ("Enable Outline", int) = 1
-        _OutlineWidth ("Outline Width", Range(0, 4)) = 1
-        _OutlineColor ("Outline Color", Color) = (0.5, 0.5, 0.5, 1)
+        _OutlineWidth ("Outline Width", Range(0, 2)) = 0.5
+        _OutlineColor ("Outline Color", Color) = (0, 0, 0, 1)
+		
+		 [Toggle]_ENABLE_ALPHA_TEST("Enable AlphaTest",float)=0
+        _Cutoff("Cutoff", Range(0,1)) = 0.5
     }
     SubShader
     {
@@ -101,7 +109,11 @@ Shader "Toon/URP_Toon"
         float4 _RampMap_ST;
         half _ShadowSmooth;
         half _RampShadowRange;
-        half4 _ShadowColor;
+        //half4 _ShadowColor;
+		//half4 _ShadowColor2;
+		//half4 _ShadowColor3;
+		//half4 _ShadowColor4;
+		//half4 _ShadowColor5;
 		float _WorldLightInfluence;
 		float _WorldLight;
 		float _RampArea1;
@@ -123,6 +135,7 @@ Shader "Toon/URP_Toon"
         half _StepSpecularIntensity;
         half _MetalSpecularGloss;
         half _MetalSpecularIntensity;
+		
 
         float _FaceShadowOffset;
         float _FaceShadowPow;
@@ -132,9 +145,11 @@ Shader "Toon/URP_Toon"
         half _RimOffset;
         half _RimThreshold;
 
-        int _EnableOutline;
+       
         half _OutlineWidth;
         half4 _OutlineColor;
+		float _Cutoff;
+		
         CBUFFER_END
 
         struct a2v{
@@ -146,6 +161,7 @@ Shader "Toon/URP_Toon"
         };
         struct v2f{
             float4 pos : POSITION;              //裁剪空间顶点坐标
+			//float4 positionCS : SV_POSITION;
             float2 uv : TEXCOORD0;              //uv
             float3 worldPos : TEXCOORD1;        //世界坐标
             float3 worldNormal : TEXCOORD2;     //世界空间法线
@@ -160,9 +176,12 @@ Shader "Toon/URP_Toon"
             Tags {"LightMode"="UniversalForward" "RenderType"="Opaque"}
             
             HLSLPROGRAM
+			#pragma target 3.0
             #pragma vertex ToonPassVert
             #pragma fragment ToonPassFrag
 			#pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
+			
+			
 
             v2f ToonPassVert(a2v v)
             {
@@ -182,6 +201,12 @@ Shader "Toon/URP_Toon"
             half4 ToonPassFrag(v2f i) : SV_TARGET
             {
                 float4 BaseColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv) * _MainColor;
+				
+				#if _ENABLE_ALPHA_TEST_ON
+                    clip(BaseColor.a-_Cutoff);
+                #endif
+				
+				
 				half4 NormalTex = SAMPLE_TEXTURE2D(_NormalTex,sampler_NormalTex,i.uv); //法线贴图
 				
 				
@@ -246,7 +271,7 @@ Shader "Toon/URP_Toon"
 
                 
                 float4 rampColor =skinRamp + tightsRamp + metalRamp + softCommonRamp + hardSilkRamp;
-                float4 FinalRamp = lerp(rampColor * BaseColor * _ShadowColor, BaseColor, step(_RampShadowRange, halfLambert * ShadowAO));
+                float4 FinalRamp = lerp(rampColor * BaseColor , BaseColor, step(_RampShadowRange, halfLambert * ShadowAO));
 				FinalRamp=eyes1*FinalRamp+(eyes*BaseColor*_Eyeslight);
 
 
@@ -298,25 +323,31 @@ Shader "Toon/URP_Toon"
                 //==========================================================================================
                 // 高光
                 half4 BlinnPhongSpecular;
-                half4 MetalSpecular;
-                half4 StepSpecular;
-                half4 FinalSpecular;
+               half4 MetalSpecular;
+               half4 StepSpecular;
+               half4 FinalSpecular;
                 // ILM的R通道，灰色为裁边视角高光
-                half StepMask = step(0.2, LightMapColor.r) - step(0.8, LightMapColor.r);
-                StepSpecular = step(1 - _StepSpecularGloss, saturate(dot(i.worldNormal, viewDir))) * _StepSpecularIntensity * StepMask;
+               half StepMask = step(0.2, LightMapColor.r) - step(0.8, LightMapColor.r);
+               StepSpecular = step(1 - _StepSpecularGloss, saturate(dot(i.worldNormal, viewDir))) * _StepSpecularIntensity * StepMask;
                 // ILM的R通道，白色为 Blinn-Phong + 金属高光
-                half MetalMask = step(0.9, LightMapColor.r);
-                // Blinn-Phong
+               half MetalMask = step(0.9, LightMapColor.r);
+                 //Blinn-Phong
                 BlinnPhongSpecular = pow(max(0, dot(i.worldNormal, halfDir)), _BlinnPhongSpecularGloss) * _BlinnPhongSpecularIntensity * MetalMask;
                 // 金属高光
                 float2 MetalMapUV = mul((float3x3) UNITY_MATRIX_V, i.worldNormal).xy * 0.5 + 0.5;
                 float MetalMap = SAMPLE_TEXTURE2D(_MetalMap, sampler_MetalMap, MetalMapUV).r;
-                MetalMap = step(_MetalSpecularGloss, MetalMap);
+                MetalMap = saturate(step(_MetalSpecularGloss, MetalMap));
                 MetalSpecular = MetalMap * _MetalSpecularIntensity * MetalMask;
                 
                 FinalSpecular = StepSpecular + BlinnPhongSpecular + MetalSpecular;
                 FinalSpecular = lerp(0, BaseColor * FinalSpecular * _SpecularColor, LightMapColor.b) ;
                 FinalSpecular *= halfLambert * ShadowAO * _EnableSpecular;
+
+
+
+
+
+
 
                 //==========================================================================================
                 // 屏幕空间深度等宽边缘光
@@ -341,59 +372,47 @@ Shader "Toon/URP_Toon"
                 float4 FinalColor = FinalRamp + FinalSpecular + RimColor;
 				
 				FinalColor = (_WorldLightInfluence * LightColor * FinalColor + (1 - _WorldLightInfluence) * FinalColor);
-                //return eyes1;
+                //return LightMapColor.r;
                 return FinalColor;
-				//return ShadowAO;
+				//return FinalSpecular;
             }
             ENDHLSL
         }
 
-        Pass
-        {
-            Name "OUTLINE_PASS"
-            Tags {}
-            Cull Front
-
-            HLSLPROGRAM
-            #pragma vertex OutlinePassVert
-            #pragma fragment OutlinePassFrag
-
-            v2f OutlinePassVert(a2v v)
-            {
-                v2f o;
-                float4 pos = TransformObjectToHClip(v.vertex);
-                o.uv = TRANSFORM_TEX(v.texCoord, _MainTex);
-                o.worldPos = TransformObjectToWorld(v.vertex);
-                VertexNormalInputs vertexNormalInput = GetVertexNormalInputs(v.normal, v.tangent);
-                o.worldNormal = vertexNormalInput.normalWS;
-                o.worldTangent = vertexNormalInput.tangentWS;
-                o.worldBiTangent = vertexNormalInput.bitangentWS;
-
-                // 获取预先烘焙进顶点色的切线空间平滑法线，修复描边断裂，同时避免蒙皮动画可能发生的错误描边
-                // UnpackNormalmapRGorAG会自动将RG变为AG，也就将顶点色控制描边粗细变化一并实现了
-                half3 smoothNormal = normalize(UnpackNormalmapRGorAG(v.color));
-                // 将法线从切线空间变换到世界空间
-                float3x3 tangentTransform = float3x3(o.worldTangent, o.worldBiTangent, o.worldNormal);
-                half3 worldOutlineNormal = normalize(mul(smoothNormal, tangentTransform));
-                // 再从世界空间变换到裁剪空间，此处 * pos.w 是为了消除齐次除法的影响，使得在摄像机远近发生变化时，描边粗细保持不变
-                half3 outlineNormal = TransformWorldToHClip(worldOutlineNormal) * pos.w;
-                // 求得屏幕宽高比，修正描边以适配窗口
-                float aspect = _ScreenParams.x / _ScreenParams.y;
-                pos.xy += 0.001 * _OutlineWidth * v.color.a * outlineNormal.xy * aspect * _EnableOutline;
-
-                //pos.xy += 0.001 * _OutlineWidth * v.color.a * o.worldNormal.xy * pos.w * aspect * _EnableOutline;
-
-                // float3 viewNormal = TransformWorldToHClip(TransformObjectToWorldNormal(v.tangent.xyz));
-                // pos.xy += 0.001 * _OutlineWidth * v.color.a * viewNormal.xy * aspect * _EnableOutline;
-                o.pos = pos;
-                return o;
-            }
-
-            half4 OutlinePassFrag(v2f i): COLOR
-            {
-                half4 col = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv);
-                return _OutlineColor * col;
-            }
+        Pass {
+            Name "OutLine"
+            Tags{ "LightMode" = "SRPDefaultUnlit" }
+	         Cull front
+	         HLSLPROGRAM
+	        #pragma vertex vert  
+	         #pragma fragment frag
+	          v2f vert(a2v input) {
+                float4 scaledScreenParams = GetScaledScreenParams();
+                float ScaleX = abs(scaledScreenParams.x / scaledScreenParams.y);//求得X因屏幕比例缩放的倍数
+		      v2f output;
+		          VertexPositionInputs vertexInput = GetVertexPositionInputs(input.vertex.xyz);
+                VertexNormalInputs normalInput = GetVertexNormalInputs(input.normal);
+                float3 normalCS = TransformWorldToHClipDir(normalInput.normalWS);//法线转换到裁剪空间
+                float2 extendDis = normalize(normalCS.xy) *(_OutlineWidth*0.01);//根据法线和线宽计算偏移量
+                extendDis.x /=ScaleX ;//由于屏幕比例可能不是1:1，所以偏移量会被拉伸显示，根据屏幕比例把x进行修正
+                output.pos = TransformObjectToHClip(input.vertex);
+				float ctrl = clamp(5/output.pos.w,0,1);//最远描边宽度
+                #if _OLWVWD_ON
+                    //屏幕下描边宽度会变
+                    output.pos.xy +=extendDis;
+                #else
+                    //屏幕下描边宽度不变，则需要顶点偏移的距离在NDC坐标下为固定值
+                    //因为后续会转换成NDC坐标，会除w进行缩放，所以先乘一个w，那么该偏移的距离就不会在NDC下有变换
+                    //output.pos.xy += extendDis * output.pos.w* ctrl;
+					output.pos.xy += extendDis * output.pos.w* ctrl*input.color.a;//顶点色控制粗细
+                #endif
+				
+                
+		      return output;
+	     }
+	     float4 frag(v2f input) : SV_Target {
+                 return float4(_OutlineColor.rgb, 1);
+	     }
             ENDHLSL
         }
 		Pass
