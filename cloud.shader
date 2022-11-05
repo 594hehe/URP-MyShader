@@ -4,7 +4,7 @@ Shader "PlaneCloud"
     {
         _BaseMap ("Texture", 2D) = "white" { }
 		_CloudEdgeNoise("CloudEdgeNoise", 2D) = "white" { }
-		_Edgespeed("Edgespeed",range(0.01,0.03))=1
+		_Edgespeed("Edgespeed",range(0.0,0.05))=0.025
 		[Toggle] _IsPlane ("Plane", int) = 0
         _BaseColor ("BaseColor", Color) = (1, 1, 1, 1)
 		_ShadowColor ("ShadowColor", Color) = (1, 1, 1, 1)
@@ -77,7 +77,7 @@ Shader "PlaneCloud"
             {
                
 				float2 time=float2(0,_Time.y*_Edgespeed);
-				float4 cloudEdgeNoise = SAMPLE_TEXTURE2D(_CloudEdgeNoise,sampler_CloudEdgeNoise,i.uv.xy*_CloudEdgeNoise_ST.xy + _CloudEdgeNoise_ST.zw + time*_CloudEdgeNoise_ST.xy);
+				float4 cloudEdgeNoise = SAMPLE_TEXTURE2D(_CloudEdgeNoise,sampler_CloudEdgeNoise,i.uv.xy*5*_CloudEdgeNoise_ST.xy + _CloudEdgeNoise_ST.zw + time*_CloudEdgeNoise_ST.xy);
 				float2 cloudNoiseUV = i.uv.xy + float2(cloudEdgeNoise.x-1,cloudEdgeNoise.y-0.25)*0.02;
 				
 				
