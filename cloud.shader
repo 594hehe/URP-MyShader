@@ -52,11 +52,13 @@ Shader "PlaneCloud"
             {
                 float4 vertex : POSITION;
                 float2 uv : TEXCOORD0;
+				float2 uv1 : TEXCOORD1;
             };
 
             struct v2f
             {
                 float2 uv : TEXCOORD0;
+				float2 uv1 : TEXCOORD1;
                 float4 positionCS : SV_POSITION;
             };
 
@@ -65,6 +67,7 @@ Shader "PlaneCloud"
                 v2f o;
                 o.positionCS = TransformObjectToHClip(v.vertex.xyz);
                 o.uv = TRANSFORM_TEX(v.uv, _BaseMap);
+				o.uv1 = TRANSFORM_TEX(v.uv1, _BaseMap);
                 #if UNITY_REVERSED_Z //这个宏是用来判断平台的，有个平台最远裁剪值是1，有的是-1
                     o.positionCS.z = o.positionCS.w * 0.000001f;
                 #else
@@ -77,23 +80,24 @@ Shader "PlaneCloud"
             {
                
 				float2 time=float2(0,_Time.y*_Edgespeed);
-				float4 cloudEdgeNoise = SAMPLE_TEXTURE2D(_CloudEdgeNoise,sampler_CloudEdgeNoise,i.uv.xy*5*_CloudEdgeNoise_ST.xy + _CloudEdgeNoise_ST.zw + time*_CloudEdgeNoise_ST.xy);
-				float2 cloudNoiseUV = i.uv.xy + float2(cloudEdgeNoise.x-1,cloudEdgeNoise.y-0.25)*0.02;
+				float4 cloudEdgeNoise = SAMPLE_TEXTURE2D(_CloudEdgeNoise,sampler_CloudEdgeNoise,i.uv.xy*2*_CloudEdgeNoise_ST.xy + _CloudEdgeNoise_ST.zw + time*_CloudEdgeNoise_ST.xy);
+				float2 cloudNoiseUV = i.uv.xy + float2(cloudEdgeNoise.x,cloudEdgeNoise.y)*0.02;
 				
 				
 				half4 col=SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap,cloudNoiseUV);
                 col.rgb = DecodeHDREnvironment(col, _BaseMap_HDR) * _BaseColor.rgb;
-				half4 colsdf;
-				colsdf=step(_sdf,col.b);
+				//half4 colsdf;
+				//colsdf=step(_sdf,col.b);
 				{
 					if (_IsPlane == 0.0)
 				    col.rgb=_ShadowColor*(1-col.r)+_BaseColor*+col.r+_rimColor*col.g;
 			        
 			
-			        else
+			        else 
 			        col.rgb=_BaseColor.rgb;
+				    col.a=col.a*smoothstep(0,0.15,i.uv1.y-0.01);
 				
-			}
+			    }
 			    //col.a=colsdf;
                 return col;
 				//return cloudEdgeNoise;
