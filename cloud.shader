@@ -3,26 +3,25 @@ Shader "Custom/Cloud"
     Properties
     {
         _BaseMap ("Texture", 2D) = "white" { }
-        _CloudEdgeNoise("CloudEdgeNoise", 2D) = "white" { }
-		_Edgespeed("Edgespeed",range(0.0,0.05))=0.025
+        _Edgespeed("Edgespeed",range(0.0,0.05))=0.025
 
+        _CloudEdgeNoise("CloudEdgeNoise", 2D) = "white" { }
+		
         [HDR]_BaseColor ("BaseColor", Color) = (1, 1, 1, 1)
 		[HDR]_ShadowColor ("ShadowColor", Color) = (1, 1, 1, 1)
 		[HDR]_ShadowColor2 ("ShadowColor2", Color) = (1, 1, 1, 1)
 		[HDR]_rimColor ("RimColor", Color) = (1, 1, 1, 1)
-        _sdf("sdf",range(0,0.2))=0.15
+        [Toggle] _IsPlane ("Plane", int) = 0
+        _sdf("底部渐隐",range(0,0.2))=0.15
 		_LerpCtrl("生成速度",range(0.0,1))=1
 		_cloudspeed("旋转速度",range(0.0,0.005))=0
 
-        [HDR]_SunCol ("Sun Colour", Color) = (1, 1, 1, 1)
+        _sunlightColor ("太阳光颜色", Color) = (1, 1, 1, 1)
 		//_SunCol1 ("Sun Colour1", Color) = (1, 1, 1, 1)
         _SunDirectionWS("Sun DirectionWS", Vector) = (1, 1, 1, 1)
-        _ScatteringIntensity("Scattering Intensity", float) = 1
 
-        
-
-        _MoonCol ("Moon Color", Color) = (1, 1, 1, 1)
-        _MoonIntensity("Moon Intensity", Range(1, 3)) = 1.2
+        _MoonCol ("月光颜色", Color) = (1, 1, 1, 1)
+      
 		_MoonScatteringIntensity("Moon Scattering Intensity", Range(0, 3)) = 0.5
         _MoonDirectionWS("Moon DirectionWS", Vector) = (1, 1, 1, 1)
 
@@ -42,6 +41,7 @@ Shader "Custom/Cloud"
         TEXTURE2D(_BaseMap);            SAMPLER(sampler_BaseMap);
         TEXTURE2D(_CloudEdgeNoise);            SAMPLER(sampler_CloudEdgeNoise);
         CBUFFER_START(UnityPerMaterial)
+        int _IsPlane;
         float4 _BaseMap_ST;
         float4 _BaseColor;
         float4 _CloudEdgeNoise_ST;
@@ -53,8 +53,8 @@ Shader "Custom/Cloud"
 		float _cloudspeed;
 		float _LerpCtrl;
     
-        float4 _SunCol;
-		float4 _SunCol1;
+        float4 _sunlightColor;
+		
         float4 _SunDirectionWS;
         float4 _MoonDirectionWS;
         float _SunSize;
@@ -64,7 +64,7 @@ Shader "Custom/Cloud"
 
         float4x4 _MoonWorld2Obj;
         float4 _MoonCol;
-        float _MoonIntensity;
+        
         
         
 
@@ -117,10 +117,19 @@ Shader "Custom/Cloud"
             v2f vert(a2v v)
             {
                 v2f o;
+
+                float angle=-(_Time.z*_cloudspeed);
+				//下面就是运用到旋转矩阵
+				float xx=v.positionOS.x*cos(angle)+sin(angle)*v.positionOS.z;
+				float zz=-v.positionOS.x*sin(angle)+cos(angle)*v.positionOS.z;
+				//将值赋给顶点的x与z的数值
+				v.positionOS.x=xx;
+				v.positionOS.z=zz;
+
                 o.uv = TRANSFORM_TEX(v.uv, _BaseMap);
 				o.uv1 = TRANSFORM_TEX(v.uv1, _BaseMap);
                 o.vertexColor = v.vertexColor; 
-                
+
                 VertexPositionInputs positionInputs = GetVertexPositionInputs(v.positionOS.xyz);
                 o.positionCS = positionInputs.positionCS;
                 o.positionWS = positionInputs.positionWS;
@@ -214,12 +223,11 @@ Shader "Custom/Cloud"
                 float3 normalizePosWS = normalize(i.positionOS);
                 float2 sphereUV = float2(atan2(normalizePosWS.x, normalizePosWS.z) / PI2, asin(normalizePosWS.y) / halfPI);
 
-
-                //抄Unity自带的太阳计算
                 
                 //自定义的一个类似大范围bloom的散射
-                half4 scattering = smoothstep(0.5, 1.5, dot(normalizePosWS, -_SunDirectionWS.xyz)) * _ScatteringIntensity;
-				
+                half4 scattering = smoothstep(0.5, 1.5, dot(normalizePosWS, -_SunDirectionWS.xyz)) ;
+				half scatteringIntensity = max(1, smoothstep(0.6, 0.0, -_SunDirectionWS.y));
+                scattering *= scatteringIntensity;
 				 
                 //刚日出时散射强度大
                 
@@ -228,10 +236,9 @@ Shader "Custom/Cloud"
 
                 //日出颜色与白天颜色插值
                 
-                //half4 moonScattering = smoothstep(0.97, 1.3, dot(normalizePosWS, -_MoonDirectionWS.xyz));
+
 				//月亮的散射
 				half4 moonScattering = smoothstep(_MoonScatteringIntensity, 1.5, dot(normalizePosWS, -_MoonDirectionWS.xyz));
-				
 				half moonscatteringIntensity = max(3, smoothstep(0.6, 0.0, -_MoonDirectionWS.y));
                 moonScattering *= moonscatteringIntensity;
 
@@ -252,10 +259,18 @@ Shader "Custom/Cloud"
                 col.a=col.a*smoothstep(0,_sdf,i.uv1.y-0.01);
 
                 
-                
-                col.rgb=(_ShadowColor*(1-col.r)+_BaseColor*col.r+_rimColor*col.g*scattering+_rimColor*col.g*moonScattering);
-                //col.rgb=col.rgb+moonScattering;
+                if (_IsPlane == 0.0)
+				    {
+                col.rgb=(_ShadowColor*(1-col.r)+_BaseColor*col.r+_rimColor*col.g*scattering+_rimColor*col.g*moonScattering)+moonScattering*_MoonCol;
+                float3 suncolor=scattering*_sunlightColor;
+                col.rgb=col.rgb+suncolor;
                 col.a=a1*col.a;
+                    }
+                else
+                {
+                    col.rgb=_BaseColor.rgb;
+					col.a=col.a;
+                }
                 return col;
             }
             ENDHLSL
