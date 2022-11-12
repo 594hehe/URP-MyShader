@@ -12,7 +12,7 @@ Shader "PlaneCloud"
 		_rimColor ("RimColor", Color) = (1, 1, 1, 1)
 		_sdf("sdf",range(0,0.2))=0.15
 		_LerpCtrl("生成速度",range(0.0,1))=1
-		_cloudspeed("旋转速度",range(0.0,0.01))=0
+		_cloudspeed("旋转速度",range(0.0,0.005))=0
     }
     SubShader
     {
@@ -110,19 +110,24 @@ Shader "PlaneCloud"
 				half cloudStep =1-verColor;
 				half a1 = clamp(smoothstep(saturate(cloudStep-0.1),cloudStep,col.b),0,col.a);  
 				//控制云的消失
-				
+				col.a=col.a*smoothstep(0,_sdf,i.uv1.y-0.01);
 				{
 					if (_IsPlane == 0.0)
-				    col.rgb=_ShadowColor*(1-col.r)+_BaseColor*col.r+_rimColor*col.g*0;//颜色叠加方式
-			        
+				    {
+						col.rgb=_ShadowColor*(1-col.r)+_BaseColor*col.r+_rimColor*col.g*0;//颜色叠加方式
+			            col.a=a1*col.a;
+					}
 			
 			        else 
-			        col.rgb=_BaseColor.rgb;
+			        {
+						col.rgb=_BaseColor.rgb;
+						col.a=col.a;
+					}
 				   
 				
 			    }
-			    col.a=col.a*smoothstep(0,_sdf,i.uv1.y-0.01);
-				col.a=a1*col.a;
+			    
+				
                 return col;
 			
             }
