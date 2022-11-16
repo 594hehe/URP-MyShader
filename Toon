@@ -1,10 +1,10 @@
-Shader "Toon/URP_Toon"
+Shader "URP_BODY"
 {
     Properties
     {
         [Header(Shader Setting)]
         [Space(5)]
-        [KeywordEnum(Base,Hair,Face)] _ShaderEnum("Shader类型",int) = 0
+        [KeywordEnum(Base,Hair)] _ShaderEnum("Shader类型",int) = 0
         [Toggle] _IsNight ("In Night", int) = 0
         [Space(5)]
 
@@ -21,17 +21,15 @@ Shader "Toon/URP_Toon"
         [Header(Shadow Setting)]
         [Space(5)]
 		_Eyeslight("眼睛亮度", Range(0, 2)) = 1
+		
         _LightMap ("LightMap", 2D) = "grey" {}
         _RampMap ("RampMap", 2D) = "white" {}
         _ShadowSmooth ("Shadow Smooth", Range(0, 1)) = 0.5
-        _RampShadowRange ("Ramp Shadow Range", Range(0.5, 1.0)) = 0.8
-        _RangeAO ("AO Range", Range(0, 2)) = 1.5
-       // _ShadowColor ("Shadow Color", Color) = (1.0, 1.0, 1.0, 1.0)
-		//_ShadowColor2 ("Shadow Color2", Color) = (1.0, 1.0, 1.0, 1.0)
-		//_ShadowColor3 ("Shadow Color3", Color) = (1.0, 1.0, 1.0, 1.0)
-		//_ShadowColor4 ("Shadow Color4", Color) = (1.0, 1.0, 1.0, 1.0)
-		//_ShadowColor5 ("Shadow Color5", Color) = (1.0, 1.0, 1.0, 1.0)
-		
+        _RampShadowRange ("Ramp Shadow Range", Range(0.5, 0.99)) = 0.99
+        _RangeAO ("AO Range", Range(0, 10)) = 0.8
+        _RangeAO1 ("AO Range1", Range(0, 10)) = 0.8
+        
+       
 		
 		
 		[IntRange]_RampArea1 ("Ramp1 Color", Range(0, 4)) = 0
@@ -39,25 +37,26 @@ Shader "Toon/URP_Toon"
         [IntRange]_RampArea3 ("Ramp3 Color", Range(0, 4)) = 2
 		[IntRange]_RampArea4 ("Ramp4 Color", Range(0, 4)) = 3
 		[IntRange]_RampArea5 ("Ramp5 Color", Range(0, 4)) = 4
+		[HDR]_RampColor1 ("Ramp Color1", Color) = (1.0, 1.0, 1.0, 1.0)
+		[HDR]_RampColor2 ("Ramp Color2", Color) = (1.0, 1.0, 1.0, 1.0)
+		[HDR]_RampColor3 ("Ramp Color3", Color) = (1.0, 1.0, 1.0, 1.0)
+		[HDR]_RampColor4 ("Ramp Color4", Color) = (1.0, 1.0, 1.0, 1.0)
+		[HDR]_RampColor5 ("Ramp Color5", Color) = (1.0, 1.0, 1.0, 1.0)
         [Space(30)]
 
-        [Header(Face Setting)]
-        [Space(5)]
-        _FaceShadowOffset ("Face Shadow Offset", range(0.0, 1.0)) = 0.1
-        _FaceShadowPow ("Face Shadow Pow", range(0.001, 1)) = 0.1
-        [Space(30)]
 
         [Header(Specular Setting)]
         [Space(5)]
         [Toggle] _EnableSpecular ("Enable Specular", int) = 1
         _MetalMap ("Metal Map", 2D) = "white" {}
         [HDR] _SpecularColor ("Specular Color", Color) = (1.0, 1.0, 1.0, 1.0)
-        _BlinnPhongSpecularGloss ("Blinn Phong Specular Gloss", Range(0.01, 10)) = 5
-        _BlinnPhongSpecularIntensity ("Blinn Phong Specular Intensity", Range(0, 1)) = 1
-        _StepSpecularGloss ("Step Specular Gloss", Range(0, 1)) = 0.5
-        _StepSpecularIntensity ("Step Specular Intensity", Range(0, 2)) = 0.5
-        _MetalSpecularGloss ("Metal Specular Gloss", Range(0, 1)) = 0.5
-        _MetalSpecularIntensity ("Metal Specular Intensity", Range(0, 5)) = 1
+        
+        _StepSpecularWidth ("裁切光范围", Range(0, 1)) = 0.5
+        _StepSpecularIntensity ("裁切光亮度", Range(0, 1)) = 0.5
+        _MetalMapV("MetalMapV", Range(0, 2)) = 0.5
+        _MetalMapIntensity("MetalMapIntensity", Range(0, 2)) = 0.5
+        _SpecularExp("SpecularExp", Range(0, 2)) = 1
+        _SpecularIntensity("SpecularIntensity", Range(0, 2)) = 1
 		
 		
         [Space(30)]
@@ -88,10 +87,14 @@ Shader "Toon/URP_Toon"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
         #pragma shader_feature _SHADERENUM_BASE _SHADERENUM_HAIR _SHADERENUM_FACE
 		#pragma shader_feature_local_fragment ENABLE_ALPHA_CLIPPING
-		
-            #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
-            #pragma multi_compile_fragment _ _SHADOWS_SOFT
-            #pragma multi_compile_fog
+		#pragma multi_compile _ _MAIN_LIGHT_SHADOWS
+        #pragma multi_compile _ _SHADOWS_SOFT
+        #pragma shader_feature _ALPHATEST_ON
+
+        #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
+        #pragma multi_compile_fragment _ _SHADOWS_SOFT
+        #pragma multi_compile_fog
+            
 
         int _IsNight;
         TEXTURE2D(_MainTex);            SAMPLER(sampler_MainTex);
@@ -105,6 +108,11 @@ Shader "Toon/URP_Toon"
         CBUFFER_START(UnityPerMaterial)
         float4 _MainTex_ST;
         half4 _MainColor;
+		half4 _RampColor1;
+		half4 _RampColor2;
+		half4 _RampColor3;
+		half4 _RampColor4;
+		half4 _RampColor5;
 
         float4 _LightMap_ST;
         float4 _RampMap_ST;
@@ -122,7 +130,14 @@ Shader "Toon/URP_Toon"
 		float _RampArea3;
 		float _RampArea4;
         float _RampArea5;
+
 		float _RangeAO;
+        float _RangeAO1;
+        float _RangeAO2;
+        float _RangeAO3;
+       
+
+        
 		float _NormalScale;
 		float _RimBrightness;
 		float _Eyeslight;
@@ -130,13 +145,15 @@ Shader "Toon/URP_Toon"
         int _EnableSpecular;
         float4 _MetalMap_ST;
         half4 _SpecularColor;
-        half _BlinnPhongSpecularGloss;
-        half _BlinnPhongSpecularIntensity;
-        half _StepSpecularGloss;
+        
+        half _StepSpecularWidth;
         half _StepSpecularIntensity;
         half _MetalSpecularGloss;
         half _MetalSpecularIntensity;
-		
+        half _MetalMapV;
+        half _MetalMapIntensity;
+        half _SpecularExp;
+		half _SpecularIntensity;
 
         float _FaceShadowOffset;
         float _FaceShadowPow;
@@ -189,6 +206,7 @@ Shader "Toon/URP_Toon"
             #pragma fragment ToonPassFrag
 			#pragma shader_feature_local_fragment ENABLE_ALPHA_CLIPPING
 			#pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
+            
 			
 			
 
@@ -210,7 +228,7 @@ Shader "Toon/URP_Toon"
             half4 ToonPassFrag(v2f i) : SV_TARGET
             {
                 float4 BaseColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv) * _MainColor;
-				
+				//float4 Rampcolor1 = _Rampcolor1;
 				#if ENABLE_ALPHA_CLIPPING
                     clip(BaseColor.a-_Cutoff);
                 #endif
@@ -239,7 +257,7 @@ Shader "Toon/URP_Toon"
                 // 依据原来的lambert值，保留0到一定数值的smooth渐变，大于这一数值的全部采样ramp最右边的颜色，从而形成硬边
                 halfLambert = smoothstep(0.0, _ShadowSmooth, halfLambert);
                 // 常暗阴影
-                float ShadowAO = smoothstep(0, 0.3, LightMapColor.g);
+                float ShadowAO = smoothstep(-0.1, 0.2, LightMapColor.g);
 
                 float RampPixelX = 0.00390625;  //0.00390625 = 1/256
                 float RampPixelY = 0.03125;     //0.03125 = 1/16/2   尽量采样到ramp条带的正中间，以避免精度误差
@@ -270,87 +288,77 @@ Shader "Toon/URP_Toon"
                     };
 					float4 eyes=smoothstep(0.51, 1, LightMapColor.g);
 					float4 eyes1=smoothstep(1, 0.51, LightMapColor.g);//眼睛分离
-					float4 skinRamp = step(abs(LightMapColor.a * 255 - 255), 39) * AllRamps[_RampArea1]-eyes; // CoolShadowRamp2
-                    float4 tightsRamp = step(abs(LightMapColor.a * 255 - 128), 39) * AllRamps[_RampArea2]-eyes; // CoolShadowRamp5
-                    float4 softCommonRamp = step(abs(LightMapColor.a * 255 - 0), 39) * AllRamps[_RampArea3]-eyes; // CoolShadowRamp1
-                    float4 hardSilkRamp = step(abs(LightMapColor.a * 255 - 77), 39) * AllRamps[_RampArea4]-eyes; // CoolShadowRamp3
-                    float4 metalRamp = step(abs(LightMapColor.a * 255 - 178), 39) * AllRamps[_RampArea5]-eyes; // CoolShadowRamp4
+
+                    float4 metalRamp2 = smoothstep(0.8,0.85,LightMapColor.a) * AllRamps[_RampArea1]-eyes;
+					float4 metalRamp3 = (smoothstep(0.6,0.65,LightMapColor.a)-smoothstep(0.8,0.85,LightMapColor.a)) * AllRamps[_RampArea2]-eyes;
+					float4 metalRamp4 = (smoothstep(0.4,0.45,LightMapColor.a)-smoothstep(0.6,0.65,LightMapColor.a))* AllRamps[_RampArea3]	-eyes;
+					float4 metalRamp5 = (smoothstep(0,0.1,LightMapColor.a)-smoothstep(0.4,0.45,LightMapColor.a))* AllRamps[_RampArea4]-eyes;
+					float4 metalRamp6 =(1-smoothstep(0,0.1,LightMapColor.a))* AllRamps[_RampArea5]-eyes;
+                  
+					float4 allramp =metalRamp2+metalRamp3+metalRamp4+metalRamp5+metalRamp6;
                 //— — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
                
 
                 
-                float4 rampColor =skinRamp + tightsRamp + metalRamp + softCommonRamp + hardSilkRamp;
-                float4 FinalRamp = lerp(rampColor * BaseColor , BaseColor, step(_RampShadowRange, halfLambert * ShadowAO));
+                //float4 rampColor =skinRamp+ tightsRamp + metalRamp + softCommonRamp + hardSilkRamp;
+                float4 rampColor =lerp(allramp, 1,step(_RampShadowRange, halfLambert * ShadowAO));
+                float4 FinalRamp = rampColor * BaseColor;
+				FinalRamp=FinalRamp*step(abs(LightMapColor.a * 255 - 255), 39)*_RampColor1+FinalRamp*step(abs(LightMapColor.a * 255 - 178), 39)*_RampColor2+FinalRamp*step(abs(LightMapColor.a * 255 - 128), 39)*_RampColor3+FinalRamp*step(abs(LightMapColor.a * 255 - 77), 39)*_RampColor4+FinalRamp*step(abs(LightMapColor.a * 255 - 0), 39)*_RampColor5;
 				FinalRamp=eyes1*FinalRamp+(eyes*BaseColor*_Eyeslight);
 
 
 
+                // 高光分类 不同的高光层 LightMap.b 用途不一样
+                float4 FinalSpecular = 0;
+                float4 Specular = 0;
+                float4 StepSpecular = 0;
+                float4 BlinnPhongSpecular;
 
-                //— — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
-                // Hair Ramp
-              //  #if _SHADERENUM_HAIR
-             //       if (_IsNight == 0.0)
-            //            RampY = RampPixelY * (33 - 2 * lerp(1, 3, step(0.5, LightMapColor.a)));
-          //          else
-             //           RampY = RampPixelY * (17 - 2 * lerp(1, 3, step(0.5, LightMapColor.a)));
-            //        RampUV = float2(RampX, RampY);
-           //         rampColor = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, RampUV);
-           //         FinalRamp = lerp(rampColor * BaseColor * _ShadowColor, BaseColor, step(_RampShadowRange, halfLambert * ShadowAO));
-          //      #endif
+                float SpecularLayer255 = LightMapColor.r*255 ;
+                float HairSpecular=smoothstep(1,0.8,LightMapColor.r)-smoothstep(0.6,0.55,LightMapColor.r);
+                HairSpecular=HairSpecular*LightMapColor.b;
+                
+                
 
-                //— — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
-                // SDF脸部阴影
-                #if _SHADERENUM_FACE
-                    float4 upDir = mul(unity_ObjectToWorld, float4(0,1,0,0));  
-                    float4 frontDir = mul(unity_ObjectToWorld, float4(0,0,1,0));
-                    float3 rightDir = cross(upDir, frontDir);
+                
+                // 裁边高光层1
+                // 甘雨的铃铛 绳子
+                
+                    StepSpecular = step(1 - _StepSpecularWidth, saturate(dot(i.worldNormal, viewDir))) * HairSpecular *_StepSpecularIntensity;
+                    half MetalMask = step(0.85, LightMapColor.r);
+                    // Blinn-Phong
+                    BlinnPhongSpecular = pow(max(0, dot(i.worldNormal, halfDir)),1) * 2 * MetalMask;
 
-                    float FdotL = dot(normalize(frontDir.xz), normalize(lightDir.xz));
-                    float RdotL = dot(normalize(rightDir.xz), normalize(lightDir.xz));
-                    // 切换贴图正反
-                    float2 FaceMapUV = float2(lerp(i.uv.x, 1-i.uv.x, step(0, RdotL)), i.uv.y);
-                    float FaceMap = SAMPLE_TEXTURE2D(_LightMap, sampler_LightMap, FaceMapUV).r;
-                    // 下面这句话是错的
-                    //float FaceMap = lerp(LightMapColor.r, 1-LightMapColor.r, step(0, RdotL)) * step(0, FdotL);
-
-                    // 调整变化曲线，使得中间大部分变化速度趋于平缓
-                    FaceMap = pow(FaceMap, _FaceShadowPow);
-
-                    // 直接用采样的结果和FdotL比较判断，头发阴影和面部阴影会对不上，需要手动调整偏移
-                    // 但是直接在LightMap数据上±Offset会导致光照进入边缘时产生阴影跳变
-                    float sinx = sin(_FaceShadowOffset);
-                    float cosx = cos(_FaceShadowOffset);
-                    float2x2 rotationOffset1 = float2x2(cosx, sinx, -sinx, cosx); //顺时针偏移
-                    float2x2 rotationOffset2 = float2x2(cosx, -sinx, sinx, cosx); //逆时针偏移
-                    float2 FaceLightDir = lerp(mul(rotationOffset1, lightDir.xz), mul(rotationOffset2, lightDir.xz), step(0, RdotL));
-                    FdotL = dot(normalize(frontDir.xz), normalize(FaceLightDir));
-
-                    //FinalRamp = float4(FaceMap, FaceMap, FaceMap, 1);
-                    FinalRamp = lerp(BaseColor, _ShadowColor * BaseColor, step(FaceMap, 1-FdotL));
-                #endif
-
-                //==========================================================================================
-                // 高光
-                half4 BlinnPhongSpecular;
-               half4 MetalSpecular;
-               half4 StepSpecular;
-               half4 FinalSpecular;
-                // ILM的R通道，灰色为裁边视角高光
-               half StepMask = step(0.2, LightMapColor.r) - step(0.8, LightMapColor.r);
-               StepSpecular = step(1 - _StepSpecularGloss, saturate(dot(i.worldNormal, viewDir))) * _StepSpecularIntensity * StepMask;
-                // ILM的R通道，白色为 Blinn-Phong + 金属高光
-               half MetalMask = step(0.9, LightMapColor.r);
-                 //Blinn-Phong
-                BlinnPhongSpecular = pow(max(0, dot(i.worldNormal, halfDir)), _BlinnPhongSpecularGloss) * _BlinnPhongSpecularIntensity * MetalMask;
-                // 金属高光
+                // 金属部分matcap图采样
+                // N转到0-1区间采样
+                
                 float2 MetalMapUV = mul((float3x3) UNITY_MATRIX_V, i.worldNormal).xy * 0.5 + 0.5;
                 float MetalMap = SAMPLE_TEXTURE2D(_MetalMap, sampler_MetalMap, MetalMapUV).r;
-                MetalMap = saturate(step(_MetalSpecularGloss, MetalMap));
-                MetalSpecular = MetalMap * _MetalSpecularIntensity * MetalMask;
+                // 二值化 金属的光
+                MetalMap = smoothstep(0.5,_MetalMapV, MetalMap)*_MetalMapIntensity;
+                //MetalMap =lerp(smoothstep(0.5,_MetalMapV, MetalMap)*_MetalMapIntensity,0,0.5);
+                half NH = saturate(dot(i.worldNormal, halfDir));
+
+                float SpecularIntensityMask=LightMapColor.b;
+                float SpecularLayerMask=LightMapColor.r;
+
+                // 基础高光
+                // BlinPhong高光 + 金属高光
+                if (SpecularLayer255 >= 220)
+                {
+                	Specular = pow(saturate(NH), 1 * _SpecularExp) * SpecularIntensityMask *_SpecularIntensity;	
+                	Specular = max(0, Specular);		
+                	Specular += MetalMap;
+                    Specular*=BlinnPhongSpecular;
+                }
                 
-                FinalSpecular = StepSpecular + BlinnPhongSpecular + MetalSpecular;
-                FinalSpecular = lerp(0, BaseColor * FinalSpecular * _SpecularColor, LightMapColor.b) ;
-                FinalSpecular *= halfLambert * ShadowAO * _EnableSpecular;
+                Specular *= BaseColor*_SpecularColor;
+                Specular = lerp(StepSpecular, Specular, SpecularLayerMask );
+                //Specular = lerp(0, Specular, SpecularLayerMask);
+                
+
+                Specular *= _EnableSpecular;
+                
 
 
 
@@ -378,12 +386,14 @@ Shader "Toon/URP_Toon"
                 float rimMask = step(_RimThreshold * 0.1, diff);
                 // 边缘光颜色的a通道用来控制边缘光强弱
                 float4 RimColor = float4(rimMask * _RimColor.rgb * _RimColor.a, 1) * _EnableRim*_RimBrightness;
-                float4 FinalColor = FinalRamp + FinalSpecular + RimColor;
+                float4 FinalColor = FinalRamp + Specular + RimColor;
 				
 				FinalColor = (_WorldLightInfluence * LightColor * FinalColor + (1 - _WorldLightInfluence) * FinalColor);
-                //return LightMapColor.r;
+				//return BaseColor;
+                
+                //return Specular;
                 return FinalColor;
-				//return FinalSpecular;
+				
             }
             ENDHLSL
         }
