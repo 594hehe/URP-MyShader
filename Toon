@@ -50,13 +50,6 @@ Shader "URP_BODY"
         [Toggle] _EnableSpecular ("Enable Specular", int) = 1
         _MetalMap ("Metal Map", 2D) = "white" {}
         _SpecularColor ("Specular Color", Color) = (1.0, 1.0, 1.0, 1.0)
-        
-        _StepSpecularWidth ("裁切光范围", Range(0, 1)) = 0.5
-        _StepSpecularIntensity ("裁切光亮度", Range(0, 1)) = 0.5
-        _MetalMapV("MetalMapV", Range(0, 2)) = 0.5
-        _MetalMapIntensity("MetalMapIntensity", Range(0, 2)) = 0.5
-        _SpecularExp("SpecularExp", Range(0, 2)) = 1
-        _SpecularIntensity("SpecularIntensity", Range(0, 2)) = 1
 
         _SpecExpon("SpecExpon", Range(0, 10)) = 3
         _KsNonMetallic("KsNonMetallic", Range(0, 3)) = 1
@@ -150,14 +143,10 @@ Shader "URP_BODY"
         float4 _MetalMap_ST;
         half4 _SpecularColor;
         
-        half _StepSpecularWidth;
-        half _StepSpecularIntensity;
-        half _MetalSpecularGloss;
-        half _MetalSpecularIntensity;
+        
         half _MetalMapV;
         half _MetalMapIntensity;
-        half _SpecularExp;
-		half _SpecularIntensity;
+        
         half _KsNonMetallic;
         half _KsMetallic;
 
@@ -350,12 +339,16 @@ Shader "URP_BODY"
                 float2 MetalMapUV = mul((float3x3) UNITY_MATRIX_V, i.worldNormal).xy * 0.5 + 0.5;
                 float MetalMap = SAMPLE_TEXTURE2D(_MetalMap, sampler_MetalMap, MetalMapUV).r;
                 float3 metallic=lerp(0,MetalMap*BaseColor,isMetal);//贴图高光
-
-                Specular=lerp(FinalRamp,metallic*_EnableSpecular,isMetal)+(Specular*_EnableSpecular);
+                if (_EnableSpecular == 1.0)
+                {
+                    Specular=lerp(FinalRamp,metallic,isMetal)+Specular;
+                }
+                else
+                {
+                    Specular=FinalRamp;
+                }
                 float4 FinalSpecular=float4(Specular,1);
                 
-               
-          
 
 
 
