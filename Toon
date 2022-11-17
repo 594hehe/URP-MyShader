@@ -49,7 +49,7 @@ Shader "URP_BODY"
         [Space(5)]
         [Toggle] _EnableSpecular ("Enable Specular", int) = 1
         _MetalMap ("Metal Map", 2D) = "white" {}
-        [HDR] _SpecularColor ("Specular Color", Color) = (1.0, 1.0, 1.0, 1.0)
+        _SpecularColor ("Specular Color", Color) = (1.0, 1.0, 1.0, 1.0)
         
         _StepSpecularWidth ("裁切光范围", Range(0, 1)) = 0.5
         _StepSpecularIntensity ("裁切光亮度", Range(0, 1)) = 0.5
@@ -57,6 +57,10 @@ Shader "URP_BODY"
         _MetalMapIntensity("MetalMapIntensity", Range(0, 2)) = 0.5
         _SpecularExp("SpecularExp", Range(0, 2)) = 1
         _SpecularIntensity("SpecularIntensity", Range(0, 2)) = 1
+
+        _SpecExpon("SpecExpon", Range(0, 10)) = 3
+        _KsNonMetallic("KsNonMetallic", Range(0, 3)) = 1
+        _KsMetallic("KsMetallic", Range(0, 3)) = 1
 		
 		
         [Space(30)]
@@ -154,6 +158,10 @@ Shader "URP_BODY"
         half _MetalMapIntensity;
         half _SpecularExp;
 		half _SpecularIntensity;
+        half _KsNonMetallic;
+        half _KsMetallic;
+
+        half _SpecExpon;
 
         float _FaceShadowOffset;
         float _FaceShadowPow;
@@ -185,6 +193,8 @@ Shader "URP_BODY"
             float3 worldNormal : TEXCOORD2;     //世界空间法线
             float3 worldTangent : TEXCOORD3;    //世界空间切线
             float3 worldBiTangent : TEXCOORD4;  //世界空间副切线
+            float3 positionWS : TEXCOORD6; 
+            float4 shadowCoord :TEXCOORD8;
             half4 color : COLOR0;               //平滑Rim所需顶点色
         };
 		
@@ -213,6 +223,8 @@ Shader "URP_BODY"
             v2f ToonPassVert(a2v v)
             {
                 v2f o;
+                VertexPositionInputs vertexInput =GetVertexPositionInputs(v.vertex.xyz);
+                o.positionWS = vertexInput.positionWS;
                 o.pos = TransformObjectToHClip(v.vertex);
                 o.uv = TRANSFORM_TEX(v.texCoord, _MainTex);
                 o.worldPos = TransformObjectToWorld(v.vertex);
@@ -221,6 +233,9 @@ Shader "URP_BODY"
                 o.worldNormal = vertexNormalInput.normalWS;
                 o.worldTangent = vertexNormalInput.tangentWS;
                 o.worldBiTangent = vertexNormalInput.bitangentWS;
+                
+                
+                o.shadowCoord = TransformWorldToShadowCoord(vertexInput.positionWS);
                 o.color = v.color;
                 return o;
             }
@@ -245,10 +260,21 @@ Shader "URP_BODY"
 				
                 float4 LightMapColor = SAMPLE_TEXTURE2D(_LightMap, sampler_LightMap, i.uv);
                 Light mainLight = GetMainLight();
+                Light Light = GetMainLight(i.shadowCoord);
                 half4 LightColor = half4(mainLight.color, 1.0);
                 half3 lightDir = normalize(mainLight.direction);
                 half3 viewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
                 half3 halfDir = normalize(viewDir + lightDir);
+
+                float3 N=normalize(i.worldNormal);
+                float3 V=viewDir;
+                float3 L=lightDir;
+                float3 H=normalize(L+V);
+
+                float NoL=dot(normalize(i.worldNormal),normalize(Light.direction));
+                float NoH=dot(N,H);
+                float NoV=dot(N,V);
+
 
                 half halfLambert = dot(lightDir, i.worldNormal) * 0.5 + 0.5;
 
@@ -307,62 +333,29 @@ Shader "URP_BODY"
 				FinalRamp=eyes1*FinalRamp+(eyes*BaseColor*_Eyeslight);
 
 
-
-                // 高光分类 不同的高光层 LightMap.b 用途不一样
-                float4 FinalSpecular = 0;
-                float4 Specular = 0;
-                float4 StepSpecular = 0;
-                float4 BlinnPhongSpecular;
-
-                float SpecularLayer255 = LightMapColor.r*255 ;
-                float HairSpecular=smoothstep(1,0.8,LightMapColor.r)-smoothstep(0.6,0.55,LightMapColor.r);
-                HairSpecular=HairSpecular*LightMapColor.b;
                 
                 
 
-                
-                // 裁边高光层1
-                // 甘雨的铃铛 绳子
-                
-                    StepSpecular = step(1 - _StepSpecularWidth, saturate(dot(i.worldNormal, viewDir))) * HairSpecular *_StepSpecularIntensity;
-                    half MetalMask = step(0.85, LightMapColor.r);
-                    // Blinn-Phong
-                    BlinnPhongSpecular = pow(max(0, dot(i.worldNormal, halfDir)),1) * 2 * MetalMask;
+                float lambertStep=smoothstep(0.423,0.450,halfLambert);
+                // Blinn-Phong
+                float BlinnPhongSpecular =step(0,dot(i.worldNormal, viewDir))*pow(max(0, dot(i.worldNormal, halfDir)),_SpecExpon);
+                float3 nonMteallicSpec =step(1.04-BlinnPhongSpecular,LightMapColor.b)*LightMapColor.r*_KsNonMetallic; //非金属部分高光
+                float3 metallicSpec = BlinnPhongSpecular*LightMapColor.b*(lambertStep*0.8+0.2)*BaseColor*_KsMetallic;//金属部分高光
+                metallicSpec =lerp (metallicSpec*_SpecularColor,metallicSpec,BlinnPhongSpecular);
+                float isMetal =step(0.85,LightMapColor.r);
+                float3 Specular=lerp(nonMteallicSpec,metallicSpec,isMetal);
+
 
                 // 金属部分matcap图采样
-                // N转到0-1区间采样
-                
                 float2 MetalMapUV = mul((float3x3) UNITY_MATRIX_V, i.worldNormal).xy * 0.5 + 0.5;
                 float MetalMap = SAMPLE_TEXTURE2D(_MetalMap, sampler_MetalMap, MetalMapUV).r;
-                // 二值化 金属的光
-                MetalMap = smoothstep(0.5,_MetalMapV, MetalMap)*_MetalMapIntensity;
-                //MetalMap =lerp(smoothstep(0.5,_MetalMapV, MetalMap)*_MetalMapIntensity,0,0.5);
-                half NH = saturate(dot(i.worldNormal, halfDir));
+                float3 metallic=lerp(0,MetalMap*BaseColor,isMetal);//贴图高光
 
-                float SpecularIntensityMask=LightMapColor.b;
-                float SpecularLayerMask=LightMapColor.r;
-
-                // 基础高光
-                // BlinPhong高光 + 金属高光
-                if (SpecularLayer255 >= 220)
-                {
-                	Specular = pow(saturate(NH), 1 * _SpecularExp) * SpecularIntensityMask *_SpecularIntensity;	
-                	Specular = max(0, Specular);		
-                	Specular += MetalMap;
-                    Specular*=BlinnPhongSpecular;
-                }
+                Specular=lerp(FinalRamp,metallic*_EnableSpecular,isMetal)+(Specular*_EnableSpecular);
+                float4 FinalSpecular=float4(Specular,1);
                 
-                Specular *= BaseColor*_SpecularColor;
-                Specular = lerp(StepSpecular, Specular, SpecularLayerMask );
-                //Specular = lerp(0, Specular, SpecularLayerMask);
-                
-
-                Specular *= _EnableSpecular;
-                
-
-
-
-
+               
+          
 
 
 
@@ -386,13 +379,13 @@ Shader "URP_BODY"
                 float rimMask = step(_RimThreshold * 0.1, diff);
                 // 边缘光颜色的a通道用来控制边缘光强弱
                 float4 RimColor = float4(rimMask * _RimColor.rgb * _RimColor.a, 1) * _EnableRim*_RimBrightness;
-                float4 FinalColor = FinalRamp + Specular + RimColor;
+                float4 FinalColor = FinalSpecular + RimColor;
 				
 				FinalColor = (_WorldLightInfluence * LightColor * FinalColor + (1 - _WorldLightInfluence) * FinalColor);
 				//return BaseColor;
                 
-                //return Specular;
                 return FinalColor;
+                //return FinalColor;
 				
             }
             ENDHLSL
