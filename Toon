@@ -5,7 +5,12 @@ Shader "URP_BODY"
         [Header(Shader Setting)]
         [Space(5)]
         [KeywordEnum(Base,Hair)] _ShaderEnum("Shader类型",int) = 0
-        [Toggle] _IsNight ("In Night", int) = 0
+        [Toggle] _IsNight ("夜晚", int) = 0
+        [Toggle] _IsShadow ("外部阴影", int) = 1
+        _Shadowlerp("阴影融合", Range(-1, 1)) = 0
+        _Shadowlerp2("阴影融合2", Range(-1, 1)) = 0
+        _Shadowlerp3("阴影融合3", Range(-1, 1)) = 0
+        _Shadowlerp4("阴影融合4", Range(-1, 1)) = 0
         [Space(5)]
 
         [Header(Main Texture Setting)]
@@ -26,8 +31,7 @@ Shader "URP_BODY"
         _RampMap ("RampMap", 2D) = "white" {}
         _ShadowSmooth ("Shadow Smooth", Range(0, 1)) = 0.5
         _RampShadowRange ("Ramp Shadow Range", Range(0.5, 0.99)) = 0.99
-        _RangeAO ("AO Range", Range(0, 10)) = 0.8
-        _RangeAO1 ("AO Range1", Range(0, 10)) = 0.8
+        
         
        
 		
@@ -51,9 +55,9 @@ Shader "URP_BODY"
         _MetalMap ("Metal Map", 2D) = "white" {}
         _SpecularColor ("Specular Color", Color) = (1.0, 1.0, 1.0, 1.0)
 
-        _SpecExpon("SpecExpon", Range(0, 10)) = 3
-        _KsNonMetallic("KsNonMetallic", Range(0, 3)) = 1
-        _KsMetallic("KsMetallic", Range(0, 3)) = 1
+        _SpecExpon("高光裁切", Range(0, 10)) = 3
+        _KsNonMetallic("非金属强度", Range(0, 1)) = 0.1
+        _KsMetallic("金属强度", Range(0, 3)) = 1
 		
 		
         [Space(30)]
@@ -62,7 +66,7 @@ Shader "URP_BODY"
         [Space(5)]
         [Toggle] _EnableRim ("Enable Rim", int) = 1
         [HDR] _RimColor ("Rim Color", Color) = (1.0, 1.0, 1.0, 1.0)
-        _RimOffset ("边缘宽度", Range(0, 0.5)) = 0.1    //粗细
+        _RimOffset ("边缘宽度", Range(0, 1)) = 0.1    //粗细
         _RimThreshold ("边缘阈值", Range(0, 2)) = 1  //细致程度
 		_RimBrightness("边缘亮度",range(0,0.5)) = 0.1
         [Space(30)]
@@ -82,11 +86,16 @@ Shader "URP_BODY"
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+        #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/CommonMaterial.hlsl"
+        #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
         #pragma shader_feature _SHADERENUM_BASE _SHADERENUM_HAIR _SHADERENUM_FACE
-		#pragma shader_feature_local_fragment ENABLE_ALPHA_CLIPPING
-		#pragma multi_compile _ _MAIN_LIGHT_SHADOWS
-        #pragma multi_compile _ _SHADOWS_SOFT
+	
+		#pragma multi_compile _ _MAIN_LIGHT_SHADOWS //接受阴影
+        #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE //产生阴影
+        #pragma multi_compile _ _SHADOWS_SOFT //软阴影  
         #pragma shader_feature _ALPHATEST_ON
+
+        #pragma shader_feature _AdditionalLights
 
         #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
         #pragma multi_compile_fragment _ _SHADOWS_SOFT
@@ -94,6 +103,7 @@ Shader "URP_BODY"
             
 
         int _IsNight;
+        int _IsShadow;
         TEXTURE2D(_MainTex);            SAMPLER(sampler_MainTex);
 		TEXTURE2D(_NormalTex);            SAMPLER(sampler_NormalTex);
         TEXTURE2D(_LightMap);           SAMPLER(sampler_LightMap);
@@ -111,15 +121,13 @@ Shader "URP_BODY"
 		half4 _RampColor4;
 		half4 _RampColor5;
 
+        
+
         float4 _LightMap_ST;
         float4 _RampMap_ST;
         half _ShadowSmooth;
         half _RampShadowRange;
-        //half4 _ShadowColor;
-		//half4 _ShadowColor2;
-		//half4 _ShadowColor3;
-		//half4 _ShadowColor4;
-		//half4 _ShadowColor5;
+        
 		float _WorldLightInfluence;
 		float _WorldLight;
 		float _RampArea1;
@@ -131,7 +139,12 @@ Shader "URP_BODY"
 		float _RangeAO;
         float _RangeAO1;
         float _RangeAO2;
-        float _RangeAO3;
+        float _Shadowlerp;
+        float _Shadowlerp2;
+        float _Shadowlerp3;
+        float _Shadowlerp4;
+
+        
        
 
         
@@ -206,6 +219,7 @@ Shader "URP_BODY"
 			#pragma shader_feature_local_fragment ENABLE_ALPHA_CLIPPING
 			#pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
             
+            
 			
 			
 
@@ -250,6 +264,9 @@ Shader "URP_BODY"
                 float4 LightMapColor = SAMPLE_TEXTURE2D(_LightMap, sampler_LightMap, i.uv);
                 Light mainLight = GetMainLight();
                 Light Light = GetMainLight(i.shadowCoord);
+                
+
+
                 half4 LightColor = half4(mainLight.color, 1.0);
                 half3 lightDir = normalize(mainLight.direction);
                 half3 viewDir = normalize(_WorldSpaceCameraPos - i.worldPos);
@@ -309,15 +326,61 @@ Shader "URP_BODY"
 					float4 metalRamp4 = (smoothstep(0.4,0.45,LightMapColor.a)-smoothstep(0.6,0.65,LightMapColor.a))* AllRamps[_RampArea3]	-eyes;
 					float4 metalRamp5 = (smoothstep(0,0.1,LightMapColor.a)-smoothstep(0.4,0.45,LightMapColor.a))* AllRamps[_RampArea4]-eyes;
 					float4 metalRamp6 =(1-smoothstep(0,0.1,LightMapColor.a))* AllRamps[_RampArea5]-eyes;
-                  
-					float4 allramp =metalRamp2+metalRamp3+metalRamp4+metalRamp5+metalRamp6;
+
+                    float4 allramp =metalRamp2+metalRamp3+metalRamp4+metalRamp5+metalRamp6;
+                    
+
+
+                    float4 oShadowRamp1 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.95+rampVmove));
+                    float4 oShadowRamp2 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.85+rampVmove));
+                    float4 oShadowRamp3 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.75+rampVmove));
+                    float4 oShadowRamp4 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.65+rampVmove));
+                    float4 oShadowRamp5 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.55+rampVmove));
+
+                    float4 oAllRamps[5] = {
+                        oShadowRamp1, oShadowRamp2, oShadowRamp3, oShadowRamp4, oShadowRamp5
+                    };
+
+                    float4 ometalRamp2 = smoothstep(0.8,0.85,LightMapColor.a) * oAllRamps[_RampArea1]-eyes;
+					float4 ometalRamp3 = (smoothstep(0.6,0.65,LightMapColor.a)-smoothstep(0.8,0.85,LightMapColor.a)) * oAllRamps[_RampArea2]-eyes;
+					float4 ometalRamp4 = (smoothstep(0.4,0.45,LightMapColor.a)-smoothstep(0.6,0.65,LightMapColor.a))* oAllRamps[_RampArea3]	-eyes;
+					float4 ometalRamp5 = (smoothstep(0,0.1,LightMapColor.a)-smoothstep(0.4,0.45,LightMapColor.a))* oAllRamps[_RampArea4]-eyes;
+					float4 ometalRamp6 =(1-smoothstep(0,0.1,LightMapColor.a))* oAllRamps[_RampArea5]-eyes;
+
+                    float4 oallramp =ometalRamp2+ometalRamp3+ometalRamp4+ometalRamp5+ometalRamp6;
+
+
+					float allao =halfLambert*ShadowAO;
                 //— — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
+
+                half3 ambient = half3(unity_SHAr.w, unity_SHAg.w, unity_SHAb.w);
+                float shadow = MainLightRealtimeShadow(i.shadowCoord); 
+                shadow =Light.shadowAttenuation;
+                float4 oshadow = float4(shadow,shadow,shadow,1);
+                
+                oshadow =lerp(oallramp,1,oshadow);
                
 
                 
-                //float4 rampColor =skinRamp+ tightsRamp + metalRamp + softCommonRamp + hardSilkRamp;
-                float4 rampColor =lerp(allramp, 1,step(_RampShadowRange, halfLambert * ShadowAO));
-                float4 FinalRamp = rampColor * BaseColor;
+                
+
+               
+
+                float4 rampColor =lerp(allramp, 1,step(_RampShadowRange, allao));
+                float4 rampColor1 =lerp(1, allramp,smoothstep(0,1, shadow)-smoothstep(0.96,1, shadow));
+               
+                
+
+                //float4 FinalRamp = rampColor * BaseColor*oshadow;
+                float4  FinalRamp=0;
+                float dishadow=halfLambert;
+
+                if ( shadow<allao &&_IsShadow == 1.0)//若处于阴影中
+                FinalRamp =rampColor1*oshadow *BaseColor;
+                //FinalRamp =  rampColor *BaseColor * oshadow;
+                else
+                FinalRamp = rampColor * BaseColor;
+                
 				FinalRamp=FinalRamp*step(abs(LightMapColor.a * 255 - 255), 39)*_RampColor1+FinalRamp*step(abs(LightMapColor.a * 255 - 178), 39)*_RampColor2+FinalRamp*step(abs(LightMapColor.a * 255 - 128), 39)*_RampColor3+FinalRamp*step(abs(LightMapColor.a * 255 - 77), 39)*_RampColor4+FinalRamp*step(abs(LightMapColor.a * 255 - 0), 39)*_RampColor5;
 				FinalRamp=eyes1*FinalRamp+(eyes*BaseColor*_Eyeslight);
 
@@ -331,7 +394,9 @@ Shader "URP_BODY"
                 float3 nonMteallicSpec =step(1.04-BlinnPhongSpecular,LightMapColor.b)*LightMapColor.r*_KsNonMetallic; //非金属部分高光
                 float3 metallicSpec = BlinnPhongSpecular*LightMapColor.b*(lambertStep*0.8+0.2)*BaseColor*_KsMetallic;//金属部分高光
                 metallicSpec =lerp (metallicSpec*_SpecularColor,metallicSpec,BlinnPhongSpecular);
+                
                 float isMetal =step(0.85,LightMapColor.r);
+
                 float3 Specular=lerp(nonMteallicSpec,metallicSpec,isMetal);
 
 
@@ -375,10 +440,15 @@ Shader "URP_BODY"
                 float4 FinalColor = FinalSpecular + RimColor;
 				
 				FinalColor = (_WorldLightInfluence * LightColor * FinalColor + (1 - _WorldLightInfluence) * FinalColor);
-				//return BaseColor;
+				
                 
+                
+                
+                //return allao;
+                //return ShadowAO;
                 return FinalColor;
-                //return FinalColor;
+                
+                
 				
             }
             ENDHLSL
@@ -410,8 +480,7 @@ Shader "URP_BODY"
                 #else
                     //屏幕下描边宽度不变，则需要顶点偏移的距离在NDC坐标下为固定值
                     //因为后续会转换成NDC坐标，会除w进行缩放，所以先乘一个w，那么该偏移的距离就不会在NDC下有变换
-                    //output.pos.xy += extendDis * output.pos.w* ctrl;
-					output.pos.xy += extendDis * output.pos.w* ctrl*input.color.a;//顶点色控制粗细
+                    output.pos.xy += extendDis * output.pos.w* ctrl*input.color.a;//顶点色控制粗细
                 #endif
 				
                 
@@ -424,7 +493,7 @@ Shader "URP_BODY"
         }
 		Pass
         {
-            Tags {"LightMode" = "ShadowCaster"}
+           // Tags {"LightMode" = "ShadowCaster"}
         }
 
         Pass
