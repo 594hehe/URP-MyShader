@@ -7,12 +7,12 @@ Shader "URP_BODY"
         [KeywordEnum(Base,Hair)] _ShaderEnum("Shader类型",int) = 0
         [Toggle] _IsNight ("夜晚", int) = 0
         [Toggle] _IsShadow ("外部阴影", int) = 1
-        _Shadowlerp("阴影融合", Range(-1, 1)) = 0
-        _Shadowlerp2("阴影融合2", Range(-1, 1)) = 0
-        _shadowColor ("阴影 Color", Color) = (1.0, 1.0, 1.0, 1.0)
+        //_Shadowlerp("阴影融合", Range(-1, 1)) = 0
+        //_Shadowlerp2("阴影融合2", Range(-1, 1)) = 0
+       // _shadowColor ("阴影 Color", Color) = (1.0, 1.0, 1.0, 1.0)
         
-        _Shadowlerp3("阴影融合3", Range(-1, 1)) = 0
-        _Shadowlerp4("阴影融合4", Range(-1, 1)) = 0
+        //_Shadowlerp3("阴影融合3", Range(-1, 1)) = 0
+        //_Shadowlerp4("阴影融合4", Range(-1, 1)) = 0
         [Space(5)]
 
         [Header(Main Texture Setting)]
@@ -28,7 +28,6 @@ Shader "URP_BODY"
         [Header(Shadow Setting)]
         [Space(5)]
 		_Eyeslight("眼睛亮度", Range(0, 2)) = 1
-		
         _LightMap ("LightMap", 2D) = "grey" {}
         _RampMap ("RampMap", 2D) = "white" {}
         _ShadowSmooth ("Shadow Smooth", Range(0, 1)) = 0.5
@@ -82,6 +81,7 @@ Shader "URP_BODY"
     SubShader
     {
         Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Opaque"}
+        Cull off
 
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -89,8 +89,9 @@ Shader "URP_BODY"
         #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/CommonMaterial.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+        //#include "Assets/BOXOPHOBIC/Atmospheric Height Fog/Core/Includes/AtmosphericHeightFog.cginc"
+
         #pragma shader_feature _SHADERENUM_BASE _SHADERENUM_HAIR _SHADERENUM_FACE
-	
 		#pragma multi_compile _ _MAIN_LIGHT_SHADOWS //接受阴影
         #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE //产生阴影
         #pragma multi_compile _ _SHADOWS_SOFT //软阴影  
@@ -121,14 +122,10 @@ Shader "URP_BODY"
 		half4 _RampColor3;
 		half4 _RampColor4;
 		half4 _RampColor5;
-
-        
-
         float4 _LightMap_ST;
         float4 _RampMap_ST;
         half _ShadowSmooth;
         half _RampShadowRange;
-        
 		float _WorldLightInfluence;
 		float _WorldLight;
 		float _RampArea1;
@@ -136,7 +133,6 @@ Shader "URP_BODY"
 		float _RampArea3;
 		float _RampArea4;
         float _RampArea5;
-
 		float _RangeAO;
         float _RangeAO1;
         float _RangeAO2;
@@ -144,39 +140,24 @@ Shader "URP_BODY"
         float _Shadowlerp2;
         float _Shadowlerp3;
         float _Shadowlerp4;
-
         float4 _shadowColor;
-
-        
-       
-
-        
 		float _NormalScale;
 		float _RimBrightness;
 		float _Eyeslight;
-       
         int _EnableSpecular;
         float4 _MetalMap_ST;
         half4 _SpecularColor;
-        
-        
         half _MetalMapV;
         half _MetalMapIntensity;
-        
         half _KsNonMetallic;
         half _KsMetallic;
-
         half _SpecExpon;
-
         float _FaceShadowOffset;
         float _FaceShadowPow;
-
         int _EnableRim;
         half4 _RimColor;
         half _RimOffset;
         half _RimThreshold;
-
-       
         half _OutlineWidth;
         half4 _OutlineColor;
 		half _Cutoff;
@@ -211,9 +192,9 @@ Shader "URP_BODY"
         {
             Tags {"LightMode"="UniversalForward" "RenderType"="Opaque"}
 			
-			Cull off
+			Cull back
             ZTest LEqual
-            ZWrite On
+            ZWrite on
             Blend One Zero
             
             HLSLPROGRAM
@@ -225,8 +206,6 @@ Shader "URP_BODY"
             
             
 			
-			
-
             v2f ToonPassVert(a2v v)
             {
                 v2f o;
@@ -449,23 +428,77 @@ Shader "URP_BODY"
                 fresnel =pow(fresnel,fresnelPower);
                 fresnel =fresnel * fresnelClamp+(1-fresnelClamp);
 
-
-
                 float4 FinalColor = 1-(1-rim*fresnel)*(1-FinalSpecular);
 
-
-
-                //return allao;
-                //return rim;
                 return FinalColor;
-                //return lerp(_shadowColor,1,smoothstep(_Shadowlerp,_Shadowlerp2,shadow));
+
                 
                 
 				
             }
             ENDHLSL
         }
+        Pass {
+            Name "back"
+            Tags{ "LightMode" = "SRPDefaultUnlit"}
+	        Cull front
+            ZTest LEqual
+            ZWrite On
+            Blend One Zero
+	        HLSLPROGRAM
+	        #pragma vertex vertback
+	        #pragma fragment frag
+			#pragma shader_feature_local_fragment ENABLE_ALPHA_CLIPPING
+             
+	          v2f vertback(a2v input) 
+              {
+                v2f o;
+                o.pos = TransformObjectToHClip(input.vertex);
+                o.uv = TRANSFORM_TEX(input.texCoord, _MainTex);
+                VertexNormalInputs vertexNormalInput = GetVertexNormalInputs(input.normal, input.tangent);
+                o.worldNormal =1- vertexNormalInput.normalWS;
+                return o;
+	     }
+	     float4 frag(v2f input) :  SV_TARGET
+        {
+            
+                 float4 BaseColorback = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv) * _MainColor;
+                 float4 LightMapColor = SAMPLE_TEXTURE2D(_LightMap, sampler_LightMap, input.uv);
+                 float rampVmove = 0.0;
+                 if (_IsNight == 0.0)
+                    rampVmove=0;
+                 else
+                    rampVmove=-0.5;
 
+                    float4 oShadowRamp1 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.95+rampVmove));
+                    float4 oShadowRamp2 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.85+rampVmove));
+                    float4 oShadowRamp3 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.75+rampVmove));
+                    float4 oShadowRamp4 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.65+rampVmove));
+                    float4 oShadowRamp5 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.55+rampVmove));
+                    float4 oAllRamps[5] = {
+                        oShadowRamp1, oShadowRamp2, oShadowRamp3, oShadowRamp4, oShadowRamp5
+                    };
+
+                    float4 ometalRamp2 = smoothstep(0.8,0.85,LightMapColor.a) * oAllRamps[_RampArea1];
+					float4 ometalRamp3 = (smoothstep(0.6,0.65,LightMapColor.a)-smoothstep(0.8,0.85,LightMapColor.a)) * oAllRamps[_RampArea2];
+					float4 ometalRamp4 = (smoothstep(0.4,0.45,LightMapColor.a)-smoothstep(0.6,0.65,LightMapColor.a))* oAllRamps[_RampArea3];
+					float4 ometalRamp5 = (smoothstep(0,0.1,LightMapColor.a)-smoothstep(0.4,0.45,LightMapColor.a))* oAllRamps[_RampArea4];
+					float4 ometalRamp6 =(1-smoothstep(0,0.1,LightMapColor.a))* oAllRamps[_RampArea5];
+
+                    float4 oallramp =ometalRamp2+ometalRamp3+ometalRamp4+ometalRamp5+ometalRamp6;
+                    BaseColorback*=oallramp;
+                
+                 return BaseColorback;
+	     }
+            ENDHLSL
+        }
+
+
+
+
+
+/*
+        
         Pass {
             Name "OutLine"
             Tags{ "LightMode" = "SRPDefaultUnlit" }
@@ -499,10 +532,14 @@ Shader "URP_BODY"
 		      return output;
 	     }
 	     float4 frag(v2f input) : SV_Target {
-                 return float4(_OutlineColor.rgb, 1);
+            return float4(_OutlineColor.rgb, 1);
+            
 	     }
             ENDHLSL
         }
+        
+*/
+        
 		Pass
         {         
             //Tags {"LightMode" = "ShadowCaster"}
