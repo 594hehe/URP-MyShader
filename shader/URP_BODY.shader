@@ -7,6 +7,8 @@ Shader "URP_BODY"
         [KeywordEnum(Base,Hair)] _ShaderEnum("Shader类型",int) = 0
         [Toggle] _IsNight ("夜晚", int) = 0
         [Toggle] _IsShadow ("外部阴影", int) = 1
+        [Toggle] _addlight ("间接光", int) = 0
+        _addLightInfluence ("间接光照强度", range(0.0, 0.5)) = 0
         //_Shadowlerp("阴影融合", Range(-1, 1)) = 0
         //_Shadowlerp2("阴影融合2", Range(-1, 1)) = 0
        // _shadowColor ("阴影 Color", Color) = (1.0, 1.0, 1.0, 1.0)
@@ -53,8 +55,10 @@ Shader "URP_BODY"
         [Header(Specular Setting)]
         [Space(5)]
         [Toggle] _EnableSpecular ("Enable Specular", int) = 1
+        [Toggle] _ispaimon ("use DarkColor", int) = 0
         _MetalMap ("Metal Map", 2D) = "white" {}
         _SpecularColor ("Specular Color", Color) = (1.0, 1.0, 1.0, 1.0)
+        _DarkColor ("Dark Color", Color) = (1.0, 1.0, 1.0, 1.0)
 
         _SpecExpon("高光裁切", Range(0, 10)) = 3
         _KsNonMetallic("非金属强度", Range(0, 1)) = 0.1
@@ -106,6 +110,7 @@ Shader "URP_BODY"
 
         int _IsNight;
         int _IsShadow;
+        int _addlight;
         TEXTURE2D(_MainTex);            SAMPLER(sampler_MainTex);
 		TEXTURE2D(_NormalTex);            SAMPLER(sampler_NormalTex);
         TEXTURE2D(_LightMap);           SAMPLER(sampler_LightMap);
@@ -145,6 +150,7 @@ Shader "URP_BODY"
 		float _RimBrightness;
 		float _Eyeslight;
         int _EnableSpecular;
+        int _ispaimon;
         float4 _MetalMap_ST;
         half4 _SpecularColor;
         half _MetalMapV;
@@ -153,6 +159,7 @@ Shader "URP_BODY"
         half _KsMetallic;
         half _SpecExpon;
         float _FaceShadowOffset;
+        float _addLightInfluence;
         float _FaceShadowPow;
         int _EnableRim;
         half4 _RimColor;
@@ -160,6 +167,7 @@ Shader "URP_BODY"
         half _RimThreshold;
         half _OutlineWidth;
         half4 _OutlineColor;
+        half4 _DarkColor;
 		half _Cutoff;
 		
         CBUFFER_END
@@ -247,7 +255,7 @@ Shader "URP_BODY"
 				
                 float4 LightMapColor = SAMPLE_TEXTURE2D(_LightMap, sampler_LightMap, i.uv);
                 Light mainLight = GetMainLight();
-                Light Light = GetMainLight(i.shadowCoord);
+                Light Light1 = GetMainLight(i.shadowCoord);
                 
 
 
@@ -261,7 +269,7 @@ Shader "URP_BODY"
                 float3 L=lightDir;
                 float3 H=normalize(L+V);
 
-                float NoL=dot(normalize(i.worldNormal),normalize(Light.direction));
+                float NoL=dot(normalize(i.worldNormal),normalize(Light1.direction));
                 float NoH=dot(N,H);
                 float NoV=dot(N,V);
 
@@ -389,7 +397,16 @@ Shader "URP_BODY"
                 // 金属部分matcap图采样
                 float2 MetalMapUV = mul((float3x3) UNITY_MATRIX_V, i.worldNormal).xy * 0.5 + 0.5;
                 float MetalMap = SAMPLE_TEXTURE2D(_MetalMap, sampler_MetalMap, MetalMapUV).r;
-                float3 metallic=lerp(0,MetalMap*BaseColor,isMetal);//贴图高光
+
+                float3 MetalMap1=lerp(_DarkColor*(1-MetalMap),1,MetalMap);//派蒙用
+
+                float3 metallic;
+
+                if (_ispaimon == 1.0)
+                metallic=lerp(0,MetalMap1*BaseColor,isMetal);//贴图高光
+                else
+                metallic=lerp(0,MetalMap*BaseColor,isMetal);
+
                 if (_EnableSpecular == 1.0)
                 {
                     Specular=lerp(FinalRamp,metallic,isMetal)+Specular;
@@ -429,6 +446,34 @@ Shader "URP_BODY"
                 fresnel =fresnel * fresnelClamp+(1-fresnelClamp);
 
                 float4 FinalColor = 1-(1-rim*fresnel)*(1-FinalSpecular);
+
+
+                int addLightsCount = GetAdditionalLightsCount();//定义在lighting库函数的方法 返回一个额外灯光的数量
+                for (int idx = 0; idx < addLightsCount; idx++)
+
+                {
+
+                	Light addlight = GetAdditionalLight(idx, i.worldPos);//定义在lightling库里的方法 返回一个灯光类型的数据
+                	//FinalColor.rgb += addlight.color * FinalColor * addlight.distanceAttenuation *_addLightInfluence;
+                    if (_addlight==1)
+                    FinalColor.rgb = lerp(FinalColor, addlight.color*_addLightInfluence*FinalColor+(1-_addLightInfluence)*FinalColor,addlight.distanceAttenuation) ;
+                    else
+
+                    FinalColor.rgb=FinalColor.rgb;
+                    
+                    
+                }
+
+
+                
+
+
+
+
+
+               FinalColor = (_WorldLightInfluence * _MainLightColor * FinalColor + (1 - _WorldLightInfluence) * FinalColor);
+
+              
 
                 return FinalColor;
 
@@ -542,7 +587,7 @@ Shader "URP_BODY"
         
 		Pass
         {         
-            //Tags {"LightMode" = "ShadowCaster"}
+            Tags {"LightMode" = "ShadowCaster"}
 
         }
 
