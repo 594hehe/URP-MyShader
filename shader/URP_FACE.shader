@@ -5,6 +5,8 @@ Shader "URP_FACE"
         [Header(Main Texture Setting)]
         [Space(5)]
         [Toggle] _IsShadow ("外部阴影", int) = 1
+        [Toggle] _addlight ("间接光", int) = 0
+        _addLightInfluence ("间接光照强度", range(0.0, 0.5)) = 0
         [HDR][MainColor]_BaseColor ("BaseColor", Color) = (1, 0.7519709, 0.6477987, 1)
 		[MainTexture]_BaseMap ("BaseMap (Albedo)", 2D) = "black" { }
 		_FaceShadowMap ("Face Shadow Map", 2D) = "white" { }
@@ -63,6 +65,7 @@ Shader "URP_FACE"
 		
 
         int _IsShadow;
+        int _addlight;
 
         CBUFFER_START(UnityPerMaterial)
 
@@ -77,6 +80,7 @@ Shader "URP_FACE"
         float _FaceShadowOffset;
 
         float3 _ShadowMultColor;
+        float _addLightInfluence;
         float _ShadowArea;
         half _ShadowSmooth;
         float _DarkShadowArea;
@@ -410,6 +414,23 @@ Shader "URP_FACE"
 			        half3 avgColor = half3(0.5, 0.5, 0.5);
 			         //根据Contrast在对比度最低的图像和原图之间差值
 			        FinalColor.rgb = lerp(avgColor, FinalColor, _Contrast);
+
+
+                int addLightsCount = GetAdditionalLightsCount();//定义在lighting库函数的方法 返回一个额外灯光的数量
+                for (int idx = 0; idx < addLightsCount; idx++)
+
+                {
+
+                	Light addlight = GetAdditionalLight(idx, input.positionWS);//定义在lightling库里的方法 返回一个灯光类型的数据
+                	//FinalColor.rgb += addlight.color * FinalColor * addlight.distanceAttenuation *_addLightInfluence;
+                    if (_addlight==1)
+                    FinalColor.rgb = lerp(FinalColor, addlight.color*_addLightInfluence * FinalColor+(1-_addLightInfluence)*FinalColor,addlight.distanceAttenuation) ;
+                    else
+
+                    FinalColor.rgb=FinalColor.rgb;
+                    
+                    
+                }
 					
 			
 
