@@ -5,7 +5,6 @@ Shader "StarRail"
         [Header(Shader Setting)]
         [Space(5)]
         [Toggle] _IsShadow ("外部阴影", int) = 1
-       
         [Toggle] _addlight ("间接光", int) = 0
 
         _addLightInfluence ("间接光照强度", range(0.0, 0.5)) = 0
@@ -21,6 +20,7 @@ Shader "StarRail"
         [Space(5)]
 		_WorldLightInfluence ("世界灯光", range(0.0, 1.0)) = 0.1
 		[HDR][MainColor] _MainColor ("Main Color", Color) = (1.0, 1.0, 1.0, 1.0)
+        _Eyeslight("眼睛穿透度", Range(0, 1)) = 0
         _Brightness("亮度", Range(1, 1.5)) = 1
         _Contrast("对比度", Range(0.9, 1.1)) = 1
         _Saturation("饱和度", Range(0.9, 1.1)) = 1 //饱和度
@@ -31,13 +31,20 @@ Shader "StarRail"
 
         
         [MainTexture] _MainTex ("Texture", 2D) = "white" {}
+        _hairc ("眼睛遮罩", 2D) = "black" {}
+        _sock ("丝袜贴图", 2D) = "black" {}
+        _sockColor ("丝袜颜色", Color) = (1.0, 1.0, 1.0, 1.0)
+        _sockColor2 ("丝袜颜色2", Color) = (1.0, 1.0, 1.0, 1.0)
+       _socklight("丝袜强度", Range(1, 5)) = 3
+       _largesock("纹理大小", Range(10, 30)) = 25
+   
 	
        
         [Space(30)]
 
         [Header(Shadow Setting)]
         [Space(5)]
-		_Eyeslight("自发光亮度", Range(0, 2)) = 1
+		_Emislight("自发光亮度", Range(0, 2)) = 1
         [HDR]_Selfcolor1 ("自发光颜色", Color) = (1.0, 1.0, 1.0, 1.0)
         _LightMap ("LightMap", 2D) = "grey" {}
         _RampMap ("RampMap", 2D) = "white" {}
@@ -98,12 +105,8 @@ Shader "StarRail"
     {
         Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Opaque"}
         Cull off
-        Stencil{
-                Ref 222
-     Comp Always
-     Pass Replace
-
-            }
+        ZWrite On
+        
 
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -134,12 +137,18 @@ Shader "StarRail"
         TEXTURE2D(_LightMap);           SAMPLER(sampler_LightMap);
         TEXTURE2D(_RampMap);            SAMPLER(sampler_RampMap);
         TEXTURE2D(_MetalMap);           SAMPLER(sampler_MetalMap);
+        TEXTURE2D(_hairc);           SAMPLER(sampler_hairc);
+        TEXTURE2D(_sock);           SAMPLER(sampler_sock);
+
+        TEXTURE2D(_MyTexture);        SAMPLER(sampler_MyTexture);
        // TEXTURE2D(_CameraDepthTexture); SAMPLER(sampler_CameraDepthTexture);
 
         // 单个材质独有的参数尽量放在 CBUFFER 中，以提高性能
         CBUFFER_START(UnityPerMaterial)
         float4 _MainTex_ST;
         half4 _MainColor;
+        half4 _sockColor;
+        half4 _sockColor2;
 		half4 _RampColor1;
 		half4 _RampColor2;
 		half4 _RampColor3;
@@ -169,7 +178,7 @@ Shader "StarRail"
         float4 _shadowColor;
 		float _NormalScale;
 		float _RimBrightness;
-		float _Eyeslight;
+		float _Emislight;
         int _EnableSpecular;
         int _ispaimon;
         float4 _MetalMap_ST;
@@ -195,6 +204,9 @@ Shader "StarRail"
         half _Brightness;
         half _darkshadow;
         half _darkshadow2;
+        half _Eyeslight;
+        half _socklight;
+        half _largesock;
        
 		
         CBUFFER_END
@@ -218,8 +230,8 @@ Shader "StarRail"
             float4 positionNDC:TEXCOORD5;
             float4 shadowCoord :TEXCOORD8;
             float fogCoord : TEXCOORD9;
-
             float4 shadowVertex : TEXCOORD7;
+            //float2 uv2 : TEXCOORD11;
             half4 color : COLOR0;               //平滑Rim所需顶点色
         };
 		
@@ -237,8 +249,8 @@ Shader "StarRail"
             
             Stencil{
                 Ref 222
-                Comp always
-                Pass replace
+                Comp Always
+                Pass Replace
             }
             
             HLSLPROGRAM
@@ -259,6 +271,8 @@ Shader "StarRail"
                 o.positionNDC = vertexInput.positionNDC;
                 o.pos = TransformObjectToHClip(v.vertex);
                 o.uv = TRANSFORM_TEX(v.texCoord, _MainTex);
+              
+
                 o.worldPos = TransformObjectToWorld(v.vertex);
                 // 使用URP自带函数计算世界空间法线
                 VertexNormalInputs vertexNormalInput = GetVertexNormalInputs(v.normal, v.tangent);
@@ -506,6 +520,29 @@ Shader "StarRail"
                 }
 
                 float4 FinalSpecular=float4(Specular,1);
+
+
+                float4 sockMap = SAMPLE_TEXTURE2D(_sock, sampler_sock, i.uv);
+                float PhongSpecular =pow(max(0, dot(i.worldNormal, viewDir)),_socklight);
+                float sockcolor2=step(0.1,sockMap.r); 
+                float sockMapUV = SAMPLE_TEXTURE2D(_sock, sampler_sock, float2(i.uv.x,i.uv.y)*_largesock).b;
+
+                
+               
+                float4 sockl=BaseColor*saturate(PhongSpecular+0.5);
+                float4 sockwenli=lerp(sockl+sockl*0.2,sockl,sockMapUV);
+                float4 sock2=lerp(sockwenli,BaseColor,PhongSpecular);
+                float4 sock3=lerp((BaseColor+0.3)*allramp*sock2,sock2,halfLambert);
+                sock3=lerp(sock3*_sockColor,sock3*_sockColor2,sockMap.g);
+             
+
+
+                float4 Finalsock=lerp(FinalSpecular,sock3,sockcolor2);
+                FinalSpecular=Finalsock;
+
+
+
+
                 
 
 
@@ -561,7 +598,7 @@ Shader "StarRail"
 
                FinalColor.rgb = MixFog(FinalColor.rgb, i.fogCoord);//混合fog
 
-               FinalColor=lerp(FinalColor,FinalColor*_Eyeslight*_Selfcolor1,step(0.8,LightMapColor.a));
+               FinalColor=lerp(FinalColor,FinalColor*_Emislight*_Selfcolor1,step(0.8,LightMapColor.a));
 
                FinalColor=FinalColor*_Brightness;
 
@@ -571,12 +608,26 @@ Shader "StarRail"
 				    //根据Saturation在饱和度最低的图像和原图之间差值
 			   FinalColor.rgb = lerp(grayColor, FinalColor, _Saturation);
 
+            float4  screenuv2= SAMPLE_TEXTURE2D(_MyTexture, sampler_MyTexture, screenUV); 
+            float4 eyes=screenuv2;
+            float liang=saturate(screenuv2*100);
+
+            float hairc = SAMPLE_TEXTURE2D(_hairc, sampler_hairc, i.uv);
+            
+
+            FinalColor=lerp(FinalColor,screenuv2,liang*_Eyeslight*hairc*2);
+
+            
+
+
               
 
                return FinalColor;
                
+            
+               
             //return saturate(LightMapColor.g*_WorldLightInfluence);
-
+           
                 
                 
 				
@@ -593,9 +644,11 @@ Shader "StarRail"
             Blend One Zero
 
             Stencil{
-                Ref 224
-                Comp Always
+                Ref 223
+                Comp always
                 Pass replace
+                //Pass Replace
+                
             }
 	        HLSLPROGRAM
 	        #pragma vertex vertback
