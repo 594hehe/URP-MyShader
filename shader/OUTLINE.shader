@@ -1,4 +1,4 @@
-Shader "ToonLit/Outline"
+Shader "verOutline"
 {
     Properties
     {
@@ -7,6 +7,8 @@ Shader "ToonLit/Outline"
         _Cutoff("Cutoff", Range(0,1)) = 0.5
         _OutlineWidth("OutlineWidth", Range(0, 1)) = 0.4
         _OutlineColor("Outline Color", Color) = (0, 0, 0, 1)
+        _OffsetFactor ("Offset Factor", Float) = 0.5
+        _OffsetUnits ("Offset Units", Float) = 0
 
         [Toggle]_TANG("是否切线", float) = 0
     
@@ -31,6 +33,9 @@ Shader "ToonLit/Outline"
                 float _Outlinefar;
                 float _OffsetX;
                 float _OffsetY;
+                float _OffsetFactor;
+                float _OffsetUnits;
+
             CBUFFER_END
             TEXTURE2D(_BaseMap);                 SAMPLER(sampler_BaseMap);
             struct Attributes{
@@ -50,7 +55,7 @@ Shader "ToonLit/Outline"
             Tags{"LightMode" = "UniversalForward"} 
             Cull off
             Stencil{
-                Ref 223
+                Ref 222
                 Comp always
                 Pass replace
             }
@@ -80,6 +85,9 @@ Shader "ToonLit/Outline"
             Name "OutLine"
             Tags{ "LightMode" = "SRPDefaultUnlit" }
 	    Cull front
+        ZTest on
+        Offset [_OffsetFactor], [_OffsetUnits]
+        //zwrite on
         Stencil{
                 Ref 222
                 Comp always
@@ -89,14 +97,11 @@ Shader "ToonLit/Outline"
 	    #pragma vertex vert  
 	    #pragma fragment frag
 	    Varyings vert(Attributes input) {
-                float4 scaledScreenParams = GetScaledScreenParams();
-                float ScaleX = abs(scaledScreenParams.x / scaledScreenParams.y);//求得X因屏幕比例缩放的倍数
+             //   float4 scaledScreenParams = GetScaledScreenParams();
+             //   float ScaleX = abs(scaledScreenParams.x / scaledScreenParams.y);//求得X因屏幕比例缩放的倍数
 		Varyings output;
 		VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
-                VertexNormalInputs normalInput = GetVertexNormalInputs(input.normalOS);
-                float3 normalCS = TransformWorldToHClipDir(normalInput.normalWS);//法线转换到裁剪空间
-                
-                
+              
                 
                 output.positionCS = vertexInput.positionCS;
       
@@ -131,9 +136,8 @@ Shader "ToonLit/Outline"
                 
 
          
-                    output.positionCS.xy = vert;
-              
-		return output;
+                output.positionCS.xy = vert;
+                return output;
 	     }
 	     float4 frag(Varyings input) : SV_Target {
                  return float4(_OutlineColor.rgb, 1);
