@@ -30,15 +30,16 @@ Shader "ZZZ_BODY"
 		_WorldLightInfluence ("世界灯光", range(0.0, 1.0)) = 0.1
 		[HDR][MainColor] _MainColor ("Main Color", Color) = (1.0, 1.0, 1.0, 1.0)
         
-        [MainTexture][NoScaleOffset]_MainTex ("Texture", 2D) = "white" {}
+        [MainTexture][NoScaleOffset]_MainTex ("Albedo (RGB)", 2D) = "white" {}
 		[NoScaleOffset]_NormalTex ("Light Tex", 2D) = "linearGray" {}
+        [NoScaleOffset]_LightMap ("Other Data Tex", 2D) = "grey" {}
 
         [Space(30)]
 
         [Header(Shadow Setting)]
         [Space(5)]
 		_Eyeslight("眼睛亮度", Range(0, 5)) = 1
-        _LightMap ("Other Data Tex", 2D) = "grey" {}
+        
         _RampMap ("RampMap", 2D) = "white" {}
         _ShadowSmooth ("Shadow Smooth", Range(0, 1)) = 0.5
         _RampShadowRange ("Ramp Shadow Range", Range(0.5, 0.99)) = 0.99
@@ -63,14 +64,14 @@ Shader "ZZZ_BODY"
         [Header(Specular Setting)]
         [Space(5)]
         [Toggle] _EnableSpecular ("Enable Specular", int) = 1
-       
+        [Toggle]_UseMatCapMask ("Use MatCap Mask", Float) = 0
         _MetalMap ("Metal Map", 2D) = "white" {}
         _SpecularColor ("Specular Color", Color) = (1.0, 1.0, 1.0, 1.0)
         
 
         _SpecExpon("高光裁切", Range(0.1, 10)) = 3
         _KsNonMetallic("非金属强度", Range(0, 1)) = 0.1
-        _KsMetallic("金属强度", Range(0, 3)) = 1
+        _KsMetallic("金属强度", Range(0, 1)) = 1
 		
 		
         [Space(30)]
@@ -131,6 +132,7 @@ Shader "ZZZ_BODY"
         int _IsNight;
         int _IsShadow;
         int _addlight;
+        int _UseMatCapMask;
         float4 _MainTex_ST;
         half4 _MainColor;
 		half4 _RampColor1;
@@ -431,28 +433,31 @@ Shader "ZZZ_BODY"
 
 
                 
-                
+                //==========================================================================================
+                // 金属高光
 
                 float lambertStep=smoothstep(0.423,0.450,halfLambert);
                 float BlinnPhongSpecular =step(0,dot(N, viewDir))*pow(max(0, dot(N, halfDir)),_SpecExpon);// Blinn-Phong
-
-               
-
-                float3 nonMteallicSpec =step(1.04-BlinnPhongSpecular,LightMapColor.r)*LightMapColor.b*_KsNonMetallic; //非金属部分高光
-                float3 metallicSpec = BlinnPhongSpecular*LightMapColor.a*BaseColor*_KsMetallic;//金属部分高光
-               // metallicSpec =lerp (metallicSpec*_SpecularColor,metallicSpec,BlinnPhongSpecular); 
-                float isMetal =smoothstep(0.1,0.2,LightMapColor.g);
-                float3 Specular=lerp(nonMteallicSpec,metallicSpec,isMetal);
-
-
-                // 金属部分matcap图采样
-                float2 MetalMapUV = mul((float3x3) UNITY_MATRIX_V, N).xy * 0.5 + 0.5;
+                float2 MetalMapUV = mul((float3x3) UNITY_MATRIX_V, N).xy * 0.5 + 0.5;//matcap
                 float MetalMap = SAMPLE_TEXTURE2D(_MetalMap, sampler_MetalMap, MetalMapUV).r;
-                float3 metallic=lerp(0,MetalMap*BaseColor,isMetal);
+                float isMetal=1;
+
+                if (_UseMatCapMask == 1.0)
+                {
+                    isMetal=LightMapColor.a;
+                }
+                else
+                {
+                    isMetal=1;
+                }
+
+                float3 metallicSpec = MetalMap*BlinnPhongSpecular*LightMapColor.b*10*_KsMetallic;//金属部分高光
+                float3 nonMteallicSpec =smoothstep(0.5,0.6,BlinnPhongSpecular)*LightMapColor.b*_KsNonMetallic; //非金属部分高光
+                float3 Specular=lerp(nonMteallicSpec,metallicSpec,LightMapColor.g*isMetal)*_SpecularColor;
 
                 if (_EnableSpecular == 1.0)
                 {
-                    Specular=lerp(FinalRamp,metallic,isMetal)+Specular;
+                    Specular=Specular+FinalRamp;
                 }
                 else
                 {
@@ -461,9 +466,6 @@ Shader "ZZZ_BODY"
                 float4 FinalSpecular=float4(Specular,1);
 
                
-                
-
-
 
                 //==========================================================================================
                 // 屏幕空间深度等宽边缘光
@@ -524,7 +526,7 @@ Shader "ZZZ_BODY"
 
                 return FinalColor;
                
-              // return halfLambert;
+              // return float4(Specular,1);
 
                 
                 
