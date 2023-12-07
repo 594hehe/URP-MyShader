@@ -12,6 +12,7 @@ Shader "ZZZ_BODY"
         [Toggle] _IsNight ("夜晚", int) = 0
         [Toggle] _IsShadow ("外部阴影", int) = 1
         _Shadowqiangdu("阴影强度", Range(0, 0.4)) = 0
+        _Eyeslight("自发光亮度", Range(0, 5)) = 1
         _Brightness22("亮面强度", Range(1, 5)) = 1
         [HDR]_lightcolor22("亮面颜色", Color) = (1.0, 1.0, 1.0, 1.0)
        
@@ -38,10 +39,19 @@ Shader "ZZZ_BODY"
 
         [Header(Shadow Setting)]
         [Space(5)]
-		_Eyeslight("眼睛亮度", Range(0, 5)) = 1
+		
+      
+         _ShadowSmooth2 ("Shallow Smooth", Range(0, 1)) = 0.7
+        _ShadowSmooth3 ("Shallow Smooth2", Range(0, 1)) = 0.8
+
+
+        _ShadowSmooth1 ("Shadow Smooth", Range(0, 1)) = 0.35
+        _ShadowSmooth ("Shadow Smooth2", Range(0, 1)) = 0.45
+
+       
+
+
         
-        _RampMap ("RampMap", 2D) = "white" {}
-        _ShadowSmooth ("Shadow Smooth", Range(0, 1)) = 0.5
         _RampShadowRange ("Ramp Shadow Range", Range(0.5, 0.99)) = 0.99
         
         
@@ -53,6 +63,18 @@ Shader "ZZZ_BODY"
         [IntRange]_RampArea3 ("Ramp3 Color", Range(0, 4)) = 2
 		[IntRange]_RampArea4 ("Ramp4 Color", Range(0, 4)) = 3
 		[IntRange]_RampArea5 ("Ramp5 Color", Range(0, 4)) = 4
+
+        _ShallowColor ("Shallow Color 1", Color) = (0.8,0.8,0.8,1)
+        _ShallowColor2 ("Shallow Color 2", Color) = (0.8,0.8,0.8,1)
+        _ShallowColor3 ("Shallow Color 3", Color) = (0.8,0.8,0.8,1)
+        _ShallowColor4 ("Shallow Color 4", Color) = (0.8,0.8,0.8,1)
+        _ShallowColor5 ("Shallow Color 5", Color) = (0.8,0.8,0.8,1)
+
+		_ShadowColor ("Shadow Color 1", Color) = (0.6,0.6,0.6,1)
+		_ShadowColor2 ("Shadow Color 2", Color) = (0.6,0.6,0.6,1)
+		_ShadowColor3 ("Shadow Color 3", Color) = (0.6,0.6,0.6,1)
+		_ShadowColor4 ("Shadow Color 4", Color) = (0.6,0.6,0.6,1)
+		_ShadowColor5 ("Shadow Color 5", Color) = (0.6,0.6,0.6,1)
 		[HDR]_RampColor1 ("Ramp Color1", Color) = (1.0, 1.0, 1.0, 1.0)
 		[HDR]_RampColor2 ("Ramp Color2", Color) = (1.0, 1.0, 1.0, 1.0)
 		[HDR]_RampColor3 ("Ramp Color3", Color) = (1.0, 1.0, 1.0, 1.0)
@@ -122,7 +144,7 @@ Shader "ZZZ_BODY"
         TEXTURE2D(_MainTex);            SAMPLER(sampler_MainTex);
 		TEXTURE2D(_NormalTex);            SAMPLER(sampler_NormalTex);
         TEXTURE2D(_LightMap);           SAMPLER(sampler_LightMap);
-        TEXTURE2D(_RampMap);            SAMPLER(sampler_RampMap);
+       
         TEXTURE2D(_MetalMap);           SAMPLER(sampler_MetalMap);
      
        // TEXTURE2D(_CameraDepthTexture); SAMPLER(sampler_CameraDepthTexture);
@@ -141,8 +163,12 @@ Shader "ZZZ_BODY"
 		half4 _RampColor4;
 		half4 _RampColor5;
         float4 _LightMap_ST;
-        float4 _RampMap_ST;
+       
         half _ShadowSmooth;
+        half _ShadowSmooth1;
+        half _ShadowSmooth2;
+        half _ShadowSmooth3;
+
         half _RampShadowRange;
 		float _WorldLightInfluence;
 		float _WorldLight;
@@ -185,6 +211,17 @@ Shader "ZZZ_BODY"
         half _Shadowqiangdu;
         half4 _lightcolor22;
         float _Brightness22;
+        half4 _ShadowColor;
+        half4 _ShadowColor2;
+        half4 _ShadowColor3;
+        half4 _ShadowColor4;
+        half4 _ShadowColor5;
+        half4 _ShallowColor;
+        half4 _ShallowColor2;
+        half4 _ShallowColor3;
+        half4 _ShallowColor4;
+        half4 _ShallowColor5;
+
        
 		
         CBUFFER_END
@@ -285,8 +322,6 @@ Shader "ZZZ_BODY"
                 Light mainLight = GetMainLight();
                 Light Light1 = GetMainLight(i.shadowCoord);
 
-                
-
 
                 half4 LightColor = half4(mainLight.color, 1.0);
                 half3 lightDir = normalize(mainLight.direction);
@@ -309,44 +344,35 @@ Shader "ZZZ_BODY"
                 float3 normalVS = normalize(mul((float3x3)UNITY_MATRIX_V,N));
 
 
+
+                float ShadowAO =saturate(smoothstep(0, 0.2,NormalTex.b));// 常暗阴影
                 half halfLambert = dot(lightDir, N) * 0.5 + 0.5;
+                float halfLambert1 = smoothstep(_ShadowSmooth1, _ShadowSmooth, halfLambert)*ShadowAO;
+                float halfLambert2 = smoothstep(_ShadowSmooth2, _ShadowSmooth3, halfLambert);
+                
+                
 
-                //==========================================================================================
-                // Base Ramp
-                // 依据原来的lambert值，保留0到一定数值的smooth渐变，大于这一数值的全部采样ramp最右边的颜色，从而形成硬边
-                halfLambert = smoothstep(0.0, _ShadowSmooth, halfLambert);
-                // 常暗阴影
-                //float ShadowAO = smoothstep(-0.1, 0.2, LightMapColor.g);
-
-                float RampPixelX = 0.00390625;  //0.00390625 = 1/256
-                float RampPixelY = 0.03125;     //0.03125 = 1/16/2   尽量采样到ramp条带的正中间，以避免精度误差
-                float RampX, RampY;
+              
 				float rampVmove = 0.0;
-                // 对X做一步Clamp，防止采样到边界
-                RampX = clamp(halfLambert, RampPixelX, 1-RampPixelX);
+
+             
  // Base Ramp
-				
-                if (_IsNight == 0.0)
-                    rampVmove=0;
-                else
-                    rampVmove=-0.5;
                 // 灰度0.0-0.2  硬Ramp
                 // 灰度0.2-0.4  软Ramp
                 // 灰度0.4-0.6  金属层
                 // 灰度0.6-0.8  布料层，主要为silk类
                 // 灰度0.8-1.0  皮肤/头发层
-                // 白天采样上半，晚上采样下半
-                    float4 ShadowRamp1 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(RampX, 0.95+rampVmove));
-                    float4 ShadowRamp2 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(RampX, 0.85+rampVmove));
-                    float4 ShadowRamp3 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(RampX, 0.75+rampVmove));
-                    float4 ShadowRamp4 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(RampX, 0.65+rampVmove));
-                    float4 ShadowRamp5 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(RampX, 0.55+rampVmove));
+                    float4 ShadowRamp1 = lerp((_ShadowColor),lerp(_ShallowColor,1,halfLambert2),halfLambert1);
+                    float4 ShadowRamp2 = lerp((_ShadowColor2),lerp(_ShallowColor2,1,halfLambert2),halfLambert1);
+                    float4 ShadowRamp3 = lerp((_ShadowColor3),lerp(_ShallowColor3,1,halfLambert2),halfLambert1);
+                    float4 ShadowRamp4 = lerp((_ShadowColor4),lerp(_ShallowColor4,1,halfLambert2),halfLambert1);
+                    float4 ShadowRamp5 = lerp((_ShadowColor5),lerp(_ShallowColor5,1,halfLambert2),halfLambert1);
                    
 					float4 AllRamps[5] = {
                         ShadowRamp1, ShadowRamp2, ShadowRamp3, ShadowRamp4, ShadowRamp5
                     };
 					float4 eyes=smoothstep(0.51, 1, LightMapColor.g);
-					float4 eyes1=smoothstep(1, 0.51, LightMapColor.g);//眼睛分离
+					float4 eyes1=smoothstep(1, 0.51, LightMapColor.g);//自发光
 
                     float4 metalRamp2 = smoothstep(0.8,0.85,LightMapColor.r) * AllRamps[_RampArea1]-eyes;
 					float4 metalRamp3 = (smoothstep(0.6,0.65,LightMapColor.r)-smoothstep(0.8,0.85,LightMapColor.r)) * AllRamps[_RampArea2]-eyes;
@@ -358,11 +384,11 @@ Shader "ZZZ_BODY"
                     
 
 
-                    float4 oShadowRamp1 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.95+rampVmove));
-                    float4 oShadowRamp2 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.85+rampVmove));
-                    float4 oShadowRamp3 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.75+rampVmove));
-                    float4 oShadowRamp4 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.65+rampVmove));
-                    float4 oShadowRamp5 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.55+rampVmove));
+                    float4 oShadowRamp1 = _ShadowColor;
+                    float4 oShadowRamp2 = _ShadowColor2;
+                    float4 oShadowRamp3 = _ShadowColor3;
+                    float4 oShadowRamp4 = _ShadowColor4;
+                    float4 oShadowRamp5 = _ShadowColor5;
 
                     float4 oAllRamps[5] = {
                         oShadowRamp1, oShadowRamp2, oShadowRamp3, oShadowRamp4, oShadowRamp5
@@ -377,7 +403,7 @@ Shader "ZZZ_BODY"
                     float4 oallramp =ometalRamp2+ometalRamp3+ometalRamp4+ometalRamp5+ometalRamp6;
 
 
-					float allao =halfLambert;
+					float allao =halfLambert*ShadowAO;
                 //— — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
 
 
@@ -409,10 +435,6 @@ Shader "ZZZ_BODY"
                 oshadow =lerp(oallramp,1,tcolor);
 
                 
-                
-
-               
-
                 float4 rampColor =lerp(allramp, 1,step(_RampShadowRange, allao));
                 float4 rampColor1 =lerp(1, allramp,smoothstep(0,1, tcolor)-smoothstep(0.96,1, tcolor));
                
@@ -526,7 +548,7 @@ Shader "ZZZ_BODY"
 
                 return FinalColor;
                
-              // return float4(Specular,1);
+             //  return allramp;
 
                 
                 
@@ -573,11 +595,11 @@ Shader "ZZZ_BODY"
                  else
                     rampVmove=-0.5;
 
-                    float4 oShadowRamp1 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.95+rampVmove));
-                    float4 oShadowRamp2 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.85+rampVmove));
-                    float4 oShadowRamp3 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.75+rampVmove));
-                    float4 oShadowRamp4 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.65+rampVmove));
-                    float4 oShadowRamp5 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.55+rampVmove));
+                    float4 oShadowRamp1 = _ShadowColor;
+                    float4 oShadowRamp2 = _ShadowColor2;
+                    float4 oShadowRamp3 = _ShadowColor3;
+                    float4 oShadowRamp4 = _ShadowColor4;
+                    float4 oShadowRamp5 = _ShadowColor5;
                     float4 oAllRamps[5] = {
                         oShadowRamp1, oShadowRamp2, oShadowRamp3, oShadowRamp4, oShadowRamp5
                     };
