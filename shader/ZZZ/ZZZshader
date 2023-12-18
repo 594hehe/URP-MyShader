@@ -4,12 +4,13 @@ Shader "ZZZ_BODY"
     {
         [Header(Shader Setting)]
         [Space(5)]
-        [KeywordEnum(Base,Hair)] _ShaderEnum("Shader类型",int) = 0
-        [Enum(UnityEngine.Rendering.CullMode)]
-        _cullMode("剔除模式",float) = 2
-        [Enum(UnityEngine.Rendering.CullMode)]
-        _cullMode2("背面剔除模式",float) = 1
-        [Toggle] _IsNight ("夜晚", int) = 0
+       
+       
+        [HDR][MainColor] _MainColor ("Main Color", Color) = (1.0, 1.0, 1.0, 1.0)
+          [MainTexture][NoScaleOffset]_MainTex ("Albedo (RGB)", 2D) = "white" {}
+		[NoScaleOffset]_NormalTex ("Light Tex", 2D) = "linearGray" {}
+        [NoScaleOffset]_LightMap ("Other Data Tex", 2D) = "grey" {}
+
         [Toggle] _IsShadow ("外部阴影", int) = 1
         _Shadowqiangdu("阴影强度", Range(0, 0.4)) = 0
         _Eyeslight("自发光亮度", Range(0, 5)) = 1
@@ -29,52 +30,37 @@ Shader "ZZZ_BODY"
         [Header(Main Texture Setting)]
         [Space(5)]
 		_WorldLightInfluence ("世界灯光", range(0.0, 1.0)) = 0.1
-		[HDR][MainColor] _MainColor ("Main Color", Color) = (1.0, 1.0, 1.0, 1.0)
+		
         
-        [MainTexture][NoScaleOffset]_MainTex ("Albedo (RGB)", 2D) = "white" {}
-		[NoScaleOffset]_NormalTex ("Light Tex", 2D) = "linearGray" {}
-        [NoScaleOffset]_LightMap ("Other Data Tex", 2D) = "grey" {}
-
+      
         [Space(30)]
 
         [Header(Shadow Setting)]
         [Space(5)]
 		
       
-         _ShadowSmooth2 ("Shallow Smooth", Range(0, 1)) = 0.7
-        _ShadowSmooth3 ("Shallow Smooth2", Range(0, 1)) = 0.8
+         _ShadowSmooth2 ("Shallow Range", Range(0, 1)) = 0.7
+        [HideInInspector]  _ShadowSmooth3 ("Shallow Smooth2", Range(0, 1)) = 0.8
 
 
-        _ShadowSmooth1 ("Shadow Smooth", Range(0, 1)) = 0.35
-        _ShadowSmooth ("Shadow Smooth2", Range(0, 1)) = 0.45
-
-       
+        _ShadowSmooth1 ("Shadow Range", Range(0, 1)) = 0.35
+        _ShadowSmooth ("阴影边缘硬度", Range(0.01, 0.15)) = 0.05
 
 
-        
-        _RampShadowRange ("Ramp Shadow Range", Range(0.5, 0.99)) = 0.99
-        
-        
-       
-		
-		
-		[IntRange]_RampArea1 ("Ramp1 Color", Range(0, 4)) = 0
-        [IntRange]_RampArea2 ("Ramp2 Color", Range(0, 4)) = 1
-        [IntRange]_RampArea3 ("Ramp3 Color", Range(0, 4)) = 2
-		[IntRange]_RampArea4 ("Ramp4 Color", Range(0, 4)) = 3
-		[IntRange]_RampArea5 ("Ramp5 Color", Range(0, 4)) = 4
+	
 
         _ShallowColor ("Shallow Color 1", Color) = (0.8,0.8,0.8,1)
         _ShallowColor2 ("Shallow Color 2", Color) = (0.8,0.8,0.8,1)
         _ShallowColor3 ("Shallow Color 3", Color) = (0.8,0.8,0.8,1)
         _ShallowColor4 ("Shallow Color 4", Color) = (0.8,0.8,0.8,1)
         _ShallowColor5 ("Shallow Color 5", Color) = (0.8,0.8,0.8,1)
-
+        [Space(10)]
 		_ShadowColor ("Shadow Color 1", Color) = (0.6,0.6,0.6,1)
 		_ShadowColor2 ("Shadow Color 2", Color) = (0.6,0.6,0.6,1)
 		_ShadowColor3 ("Shadow Color 3", Color) = (0.6,0.6,0.6,1)
 		_ShadowColor4 ("Shadow Color 4", Color) = (0.6,0.6,0.6,1)
 		_ShadowColor5 ("Shadow Color 5", Color) = (0.6,0.6,0.6,1)
+        [Space(10)]
 		[HDR]_RampColor1 ("Ramp Color1", Color) = (1.0, 1.0, 1.0, 1.0)
 		[HDR]_RampColor2 ("Ramp Color2", Color) = (1.0, 1.0, 1.0, 1.0)
 		[HDR]_RampColor3 ("Ramp Color3", Color) = (1.0, 1.0, 1.0, 1.0)
@@ -108,16 +94,30 @@ Shader "ZZZ_BODY"
 
         [Header(Outline Setting)]
         [Space(5)]
-        _OutlineWidth ("Outline Width", Range(0, 2)) = 0.5
-        _OutlineColor ("Outline Color", Color) = (0, 0, 0, 1)
+         _OutlineWidth("OutlineWidth", Range(0, 1)) = 0.4
+
+        _OutlineColor1("Outline Color1", Color) = (0, 0, 0, 1)
+        _OutlineColor2("Outline Color2", Color) = (0, 0, 0, 1)
+        _OutlineColor3("Outline Color3", Color) = (0, 0, 0, 1)
+        _OutlineColor4("Outline Color4", Color) = (0, 0, 0, 1)
+        _OutlineColor5("Outline Color5", Color) = (0.4811321, 0.1050894, 0, 1.0)
+
+
+        [Toggle]_TANG("是否切线", float) = 0
+        _OffsetFactor ("Offset Factor", Float) = 0.5
+        _OffsetUnits ("Offset Units", Float) = 0
 		
 		 [Toggle(ENABLE_ALPHA_CLIPPING)]_EnableAlphaClipping ("EnableAlphaClipping", Float) = 0
         _Cutoff("Cutoff", Range(0,1)) = 0.5
     }
+    
     SubShader
     {
         Tags { "RenderPipeline"="UniversalPipeline" "RenderType"="Opaque"}
-        Cull off
+        ZWrite On
+        ZTest LEqual
+        
+      
 
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -125,33 +125,29 @@ Shader "ZZZ_BODY"
         #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/CommonMaterial.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+        
         #include "Assets/Scripts/CustomShadowmap/CustomShadows.hlsl"
-        //#include "Assets/BOXOPHOBIC/Atmospheric Height Fog/Core/Includes/AtmosphericHeightFog.cginc"
 
-        #pragma shader_feature _SHADERENUM_BASE _SHADERENUM_HAIR _SHADERENUM_FACE
+      
 		#pragma multi_compile _ _MAIN_LIGHT_SHADOWS //接受阴影
         #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE //产生阴影
         #pragma multi_compile _ _SHADOWS_SOFT //软阴影  
         #pragma shader_feature _ALPHATEST_ON
         #pragma shader_feature _AdditionalLights
+        #pragma shader_feature _TANG_ON
 
         #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
-        #pragma multi_compile_fragment _ _SHADOWS_SOFT
         #pragma multi_compile_fog
             
 
         
-        TEXTURE2D(_MainTex);            SAMPLER(sampler_MainTex);
-		TEXTURE2D(_NormalTex);            SAMPLER(sampler_NormalTex);
-        TEXTURE2D(_LightMap);           SAMPLER(sampler_LightMap);
        
-        TEXTURE2D(_MetalMap);           SAMPLER(sampler_MetalMap);
      
-       // TEXTURE2D(_CameraDepthTexture); SAMPLER(sampler_CameraDepthTexture);
+       
 
         // 单个材质独有的参数尽量放在 CBUFFER 中，以提高性能
         CBUFFER_START(UnityPerMaterial)
-        int _IsNight;
+
         int _IsShadow;
         int _addlight;
         int _UseMatCapMask;
@@ -169,14 +165,9 @@ Shader "ZZZ_BODY"
         half _ShadowSmooth2;
         half _ShadowSmooth3;
 
-        half _RampShadowRange;
 		float _WorldLightInfluence;
 		float _WorldLight;
-		float _RampArea1;
-        float _RampArea2;
-		float _RampArea3;
-		float _RampArea4;
-        float _RampArea5;
+
 		float _RangeAO;
         float _RangeAO1;
         float _RangeAO2;
@@ -222,20 +213,35 @@ Shader "ZZZ_BODY"
         half4 _ShallowColor4;
         half4 _ShallowColor5;
 
+        float4 _OutlineColor1;
+        float4 _OutlineColor2;
+        float4 _OutlineColor3;
+        float4 _OutlineColor4;
+        float4 _OutlineColor5;
+
+        float _OffsetFactor;
+        float _OffsetUnits;
+
        
 		
         CBUFFER_END
 
-        struct a2v{
-            float3 vertex : POSITION;       //顶点坐标
+        TEXTURE2D(_MainTex);            SAMPLER(sampler_MainTex);
+		TEXTURE2D(_NormalTex);          SAMPLER(sampler_NormalTex);
+        TEXTURE2D(_LightMap);           SAMPLER(sampler_LightMap);
+        TEXTURE2D(_MetalMap);           SAMPLER(sampler_MetalMap);
+
+          struct a2v{
+            float4 vertex : POSITION;       //顶点坐标
             half4 color : COLOR0;           //顶点色
             half3 normal : NORMAL;          //法线
             half4 tangent : TANGENT;        //切线
-            float2 texCoord : TEXCOORD0;    //纹理坐标
+            float2 texCoord : TEXCOORD0; 
+            
         };
         struct v2f{
-            float4 pos : POSITION;              //裁剪空间顶点坐标
-			//float4 positionCS : SV_POSITION;
+            float4 positionCS : SV_POSITION;              //裁剪空间顶点坐标
+			
             float2 uv : TEXCOORD0;              //uv
             float3 worldPos : TEXCOORD1;        //世界坐标
             float3 worldNormal : TEXCOORD2;     //世界空间法线
@@ -247,7 +253,7 @@ Shader "ZZZ_BODY"
             float fogCoord : TEXCOORD9;
 
             float4 shadowVertex : TEXCOORD7;
-            half4 color : COLOR0;               //平滑Rim所需顶点色
+            float4 color : COLOR0;               //平滑Rim所需顶点色
         };
 		
 		
@@ -257,7 +263,7 @@ Shader "ZZZ_BODY"
         {
             Tags {"LightMode"="UniversalForward" "RenderType"="Opaque"}
 			
-			Cull [_cullMode]
+			Cull Off
             ZTest LEqual
             ZWrite on
             Blend One Zero
@@ -284,7 +290,7 @@ Shader "ZZZ_BODY"
                 VertexPositionInputs vertexInput =GetVertexPositionInputs(v.vertex.xyz);
                 o.positionWS = vertexInput.positionWS;
                 o.positionNDC = vertexInput.positionNDC;
-                o.pos = TransformObjectToHClip(v.vertex);
+                o.positionCS = TransformObjectToHClip(v.vertex);
                 o.uv = TRANSFORM_TEX(v.texCoord, _MainTex);
                 o.worldPos = TransformObjectToWorld(v.vertex);
                 // 使用URP自带函数计算世界空间法线
@@ -299,12 +305,13 @@ Shader "ZZZ_BODY"
                 o.shadowVertex = mul(_ZorroShadowMatrix, float4(o.worldPos.xyz, 1.0f));
                 
                 o.color = v.color;
-                o.fogCoord = ComputeFogFactor(o.pos.z);
+                o.fogCoord = ComputeFogFactor(o.positionCS.z);
                 return o;
             }
 
-            half4 ToonPassFrag(v2f i) : SV_TARGET
+            half4 ToonPassFrag(v2f i, FRONT_FACE_TYPE isFrontFace : FRONT_FACE_SEMANTIC) : SV_TARGET
             {
+                i.worldNormal = IS_FRONT_VFACE(isFrontFace, i.worldNormal, -i.worldNormal);
                 float4 BaseColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv) * _MainColor;
 	
 				#if ENABLE_ALPHA_CLIPPING
@@ -347,8 +354,8 @@ Shader "ZZZ_BODY"
 
                 float ShadowAO =saturate(smoothstep(0, 0.2,NormalTex.b));// 常暗阴影
                 half halfLambert = dot(lightDir, N) * 0.5 + 0.5;
-                float halfLambert1 = smoothstep(_ShadowSmooth1, _ShadowSmooth, halfLambert)*ShadowAO;
-                float halfLambert2 = smoothstep(_ShadowSmooth2, _ShadowSmooth3, halfLambert);
+                float halfLambert1 = smoothstep(_ShadowSmooth1, _ShadowSmooth1+_ShadowSmooth, halfLambert)*ShadowAO;
+                float halfLambert2 = smoothstep(_ShadowSmooth2, _ShadowSmooth2+_ShadowSmooth, halfLambert);
                 
                 
 
@@ -374,11 +381,11 @@ Shader "ZZZ_BODY"
 					float4 eyes=smoothstep(0.51, 1, LightMapColor.g);
 					float4 eyes1=smoothstep(1, 0.51, LightMapColor.g);//自发光
 
-                    float4 metalRamp2 = smoothstep(0.8,0.85,LightMapColor.r) * AllRamps[_RampArea1]-eyes;
-					float4 metalRamp3 = (smoothstep(0.6,0.65,LightMapColor.r)-smoothstep(0.8,0.85,LightMapColor.r)) * AllRamps[_RampArea2]-eyes;
-					float4 metalRamp4 = (smoothstep(0.4,0.45,LightMapColor.r)-smoothstep(0.6,0.65,LightMapColor.r))* AllRamps[_RampArea3]	-eyes;
-					float4 metalRamp5 = (smoothstep(0,0.1,LightMapColor.r)-smoothstep(0.4,0.45,LightMapColor.r))* AllRamps[_RampArea4]-eyes;
-					float4 metalRamp6 =(1-smoothstep(0,0.1,LightMapColor.r))* AllRamps[_RampArea5]-eyes;
+                    float4 metalRamp2 = smoothstep(0.8,0.85,LightMapColor.r) * AllRamps[0]-eyes;
+					float4 metalRamp3 = (smoothstep(0.6,0.65,LightMapColor.r)-smoothstep(0.8,0.85,LightMapColor.r)) * AllRamps[1]-eyes;
+					float4 metalRamp4 = (smoothstep(0.4,0.45,LightMapColor.r)-smoothstep(0.6,0.65,LightMapColor.r))* AllRamps[2]	-eyes;
+					float4 metalRamp5 = (smoothstep(0,0.1,LightMapColor.r)-smoothstep(0.4,0.45,LightMapColor.r))* AllRamps[3]-eyes;
+					float4 metalRamp6 =(1-smoothstep(0,0.1,LightMapColor.r))* AllRamps[4]-eyes;
 
                     float4 allramp =(metalRamp2+metalRamp3+metalRamp4+metalRamp5+metalRamp6)+_Shadowqiangdu;
                     
@@ -394,11 +401,11 @@ Shader "ZZZ_BODY"
                         oShadowRamp1, oShadowRamp2, oShadowRamp3, oShadowRamp4, oShadowRamp5
                     };
 
-                    float4 ometalRamp2 = smoothstep(0.8,0.85,LightMapColor.r) * oAllRamps[_RampArea1]-eyes;
-					float4 ometalRamp3 = (smoothstep(0.6,0.65,LightMapColor.r)-smoothstep(0.8,0.85,LightMapColor.r)) * oAllRamps[_RampArea2]-eyes;
-					float4 ometalRamp4 = (smoothstep(0.4,0.45,LightMapColor.r)-smoothstep(0.6,0.65,LightMapColor.r))* oAllRamps[_RampArea3]	-eyes;
-					float4 ometalRamp5 = (smoothstep(0,0.1,LightMapColor.r)-smoothstep(0.4,0.45,LightMapColor.r))* oAllRamps[_RampArea4]-eyes;
-					float4 ometalRamp6 =(1-smoothstep(0,0.1,LightMapColor.r))* oAllRamps[_RampArea5]-eyes;
+                    float4 ometalRamp2 = smoothstep(0.8,0.85,LightMapColor.r) * oAllRamps[0]-eyes;
+					float4 ometalRamp3 = (smoothstep(0.6,0.65,LightMapColor.r)-smoothstep(0.8,0.85,LightMapColor.r)) * oAllRamps[1]-eyes;
+					float4 ometalRamp4 = (smoothstep(0.4,0.45,LightMapColor.r)-smoothstep(0.6,0.65,LightMapColor.r))* oAllRamps[2]	-eyes;
+					float4 ometalRamp5 = (smoothstep(0,0.1,LightMapColor.r)-smoothstep(0.4,0.45,LightMapColor.r))* oAllRamps[3]-eyes;
+					float4 ometalRamp6 =(1-smoothstep(0,0.1,LightMapColor.r))* oAllRamps[4]-eyes;
 
                     float4 oallramp =ometalRamp2+ometalRamp3+ometalRamp4+ometalRamp5+ometalRamp6;
 
@@ -435,7 +442,7 @@ Shader "ZZZ_BODY"
                 oshadow =lerp(oallramp,1,tcolor);
 
                 
-                float4 rampColor =lerp(allramp, 1,step(_RampShadowRange, allao));
+                float4 rampColor =lerp(allramp, 1,allao);
                 float4 rampColor1 =lerp(1, allramp,smoothstep(0,1, tcolor)-smoothstep(0.96,1, tcolor));
                
                 
@@ -535,14 +542,19 @@ Shader "ZZZ_BODY"
                     
                 }
 
-                FinalColor=lerp(FinalColor,FinalColor*_lightcolor22*_Brightness22,saturate(step(0.9,halfLambert)));
+                FinalColor=lerp(FinalColor,FinalColor*_lightcolor22*_Brightness22,halfLambert1);
 
 
 
 
                FinalColor = (_WorldLightInfluence * _MainLightColor * FinalColor + (1 - _WorldLightInfluence) * FinalColor);
 
-               FinalColor.rgb = MixFog(FinalColor.rgb, i.fogCoord);//混合fog
+               //混合fog
+               float4 BaseColorback=1;
+               BaseColorback=oallramp*BaseColor;
+               FinalColor = IS_FRONT_VFACE(isFrontFace, FinalColor, BaseColorback);
+
+               FinalColor.rgb = MixFog(FinalColor.rgb, i.fogCoord);
 
               
 
@@ -556,69 +568,77 @@ Shader "ZZZ_BODY"
             }
             ENDHLSL
         }
-        Pass {
-            Name "back"
-            Tags{ "LightMode" = "SRPDefaultUnlit"}
-	        Cull [_cullMode2]
-            ZTest LEqual
-            ZWrite On
-            Blend One Zero
+
+        
+         Pass {
+            Name "OutLine"
+            Tags{ "LightMode" ="COutLine"  }
+            Cull front
+            ZTest on
+            Offset [_OffsetFactor], [_OffsetUnits]
 
             Stencil{
-                Ref 1
+                Ref 222
                 Comp always
                 Pass replace
             }
-	        HLSLPROGRAM
-	        #pragma vertex vertback
-	        #pragma fragment frag
-			#pragma shader_feature_local_fragment ENABLE_ALPHA_CLIPPING
-             
-	          v2f vertback(a2v input) 
-              {
-                v2f o;
-                o.pos = TransformObjectToHClip(input.vertex);
-                o.uv = TRANSFORM_TEX(input.texCoord, _MainTex);
-                VertexNormalInputs vertexNormalInput = GetVertexNormalInputs(input.normal, input.tangent);
-                o.worldNormal =1- vertexNormalInput.normalWS;
-                o.fogCoord = ComputeFogFactor(o.pos.z);
-                return o;
-	     }
-	     float4 frag(v2f input) :  SV_TARGET
+            //zwrite on
+         
+	    HLSLPROGRAM
+	    #pragma vertex vert  
+	    #pragma fragment frag
+	    v2f vert(a2v i) 
         {
-            
-                 float4 BaseColorback = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv) * _MainColor;
-                 float4 LightMapColor = SAMPLE_TEXTURE2D(_LightMap, sampler_LightMap, input.uv);
-                 float rampVmove = 0.0;
-                 if (_IsNight == 0.0)
-                    rampVmove=0;
-                 else
-                    rampVmove=-0.5;
+		v2f output;
+		VertexPositionInputs vertexInput = GetVertexPositionInputs(i.vertex.xyz);
 
-                    float4 oShadowRamp1 = _ShadowColor;
-                    float4 oShadowRamp2 = _ShadowColor2;
-                    float4 oShadowRamp3 = _ShadowColor3;
-                    float4 oShadowRamp4 = _ShadowColor4;
-                    float4 oShadowRamp5 = _ShadowColor5;
-                    float4 oAllRamps[5] = {
-                        oShadowRamp1, oShadowRamp2, oShadowRamp3, oShadowRamp4, oShadowRamp5
-                    };
 
-                    float4 ometalRamp2 = smoothstep(0.8,0.85,LightMapColor.r) * oAllRamps[_RampArea1];
-					float4 ometalRamp3 = (smoothstep(0.6,0.65,LightMapColor.r)-smoothstep(0.8,0.85,LightMapColor.r)) * oAllRamps[_RampArea2];
-					float4 ometalRamp4 = (smoothstep(0.4,0.45,LightMapColor.r)-smoothstep(0.6,0.65,LightMapColor.r))* oAllRamps[_RampArea3];
-					float4 ometalRamp5 = (smoothstep(0,0.1,LightMapColor.r)-smoothstep(0.4,0.45,LightMapColor.r))* oAllRamps[_RampArea4];
-					float4 ometalRamp6 =(1-smoothstep(0,0.1,LightMapColor.r))* oAllRamps[_RampArea5];
 
-                    float4 oallramp =ometalRamp2+ometalRamp3+ometalRamp4+ometalRamp5+ometalRamp6;
-                    BaseColorback*=oallramp;
+        output.positionCS = vertexInput.positionCS;
+        output.uv = TRANSFORM_TEX(i.texCoord, _MainTex);
+        float3 fixedVerterxNormal;
+        #if _TANG_ON
+        fixedVerterxNormal= i.tangent;
+        #else
+        fixedVerterxNormal= i.normal;
+        #endif
 
-                    BaseColorback.rgb = MixFog(BaseColorback.rgb, input.fogCoord);//混合fog
-                
-                 return BaseColorback;
+                float3 positionVS = mul(UNITY_MATRIX_MV, i.vertex).xyz;
+                float viewDepth = abs(positionVS.z);
+                float4 viewPos = mul(UNITY_MATRIX_MV,  i.vertex);
+                float4 vert = viewPos / viewPos.w;
+                float s = -(viewPos.z / unity_CameraProjection[1].y);
+                float power = pow(s, 0.5);
+                float3 viewSpaceNormal = mul(UNITY_MATRIX_IT_MV, fixedVerterxNormal);
+                viewSpaceNormal.z = 0.01;
+	            viewSpaceNormal = normalize(viewSpaceNormal);
+                float width;
+                width = power*(_OutlineWidth/100);
+              
+
+                vert.xy += viewSpaceNormal.xy *width;
+                vert = mul(UNITY_MATRIX_P, vert);
+         
+                output.positionCS.xy = vert;
+                return output;
 	     }
-            ENDHLSL
-        }
+         
+	     float4 frag(v2f input) : SV_Target {
+                    float4 LightMapColor = SAMPLE_TEXTURE2D(_LightMap, sampler_LightMap, input.uv);
+               
+                    float4 metalRamp2 = smoothstep(0.8,0.85,LightMapColor.r)*_OutlineColor1;
+					float4 metalRamp3 = (smoothstep(0.6,0.65,LightMapColor.r)-smoothstep(0.8,0.85,LightMapColor.r)) *_OutlineColor2;
+					float4 metalRamp4 = (smoothstep(0.4,0.45,LightMapColor.r)-smoothstep(0.6,0.65,LightMapColor.r))*_OutlineColor3;
+					float4 metalRamp5 = (smoothstep(0,0.1,LightMapColor.r)-smoothstep(0.4,0.45,LightMapColor.r))*_OutlineColor4;
+					float4 metalRamp6 =(1-smoothstep(0,0.1,LightMapColor.r))*_OutlineColor5;
+
+                    float4 alloutlinecolor=metalRamp2+metalRamp3+metalRamp4+metalRamp5+metalRamp6;
+                    
+                 return alloutlinecolor;
+	     }
+	     ENDHLSL
+         }
+        
 
         
 
@@ -648,16 +668,16 @@ Shader "ZZZ_BODY"
 
                 
 
-               o.pos=TransformWorldToHClip(ApplyShadowBias(WSpos,WSnor,MainLight.direction));
+               o.positionCS=TransformWorldToHClip(ApplyShadowBias(WSpos,WSnor,MainLight.direction));
               
           
 
 
 
                 #if UNITY_REVERSED_Z
-                o.pos.z=min(o.pos.z,o.pos.w*UNITY_NEAR_CLIP_VALUE);
+                o.positionCS.z=min(o.positionCS.z,o.positionCS.w*UNITY_NEAR_CLIP_VALUE);
                 #else
-                o.pos.z=max(o.pos.z,o.pos.w*UNITY_NEAR_CLIP_VALUE);
+                o.positionCS.z=max(o.positionCS.z,o.positionCS.w*UNITY_NEAR_CLIP_VALUE);
                 #endif
                 
                 return o;
@@ -683,5 +703,5 @@ Shader "ZZZ_BODY"
             Tags {"LightMode" = "DepthOnly"}
         }
     }
-   // CustomEditor "UnityEditor.Rendering.Universal.ShaderGUI.LitShader"
+  
 }
