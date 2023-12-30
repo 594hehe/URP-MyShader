@@ -1,12 +1,12 @@
-Shader "URP_BODY"
+Shader "Genshin_BODY"
 {
     Properties
     {
         [Header(Shader Setting)]
         [Space(5)]
-        [KeywordEnum(Base,Hair)] _ShaderEnum("Shader类型",int) = 0
         [Toggle] _IsNight ("夜晚", int) = 0
-        [Toggle] _IsShadow ("外部阴影", int) = 1
+       // [Toggle] _IsShadow ("外部阴影", int) = 1
+       
         [Toggle] _addlight ("间接光", int) = 0
         _addLightInfluence ("间接光照强度", range(0.0, 0.5)) = 0
         //_Shadowlerp("阴影融合", Range(-1, 1)) = 0
@@ -76,8 +76,18 @@ Shader "URP_BODY"
 
         [Header(Outline Setting)]
         [Space(5)]
-        _OutlineWidth ("Outline Width", Range(0, 2)) = 0.5
-        _OutlineColor ("Outline Color", Color) = (0, 0, 0, 1)
+       
+        _OutlineWidth("OutlineWidth", Range(0, 1)) = 0.4
+
+        _OutlineColor1("Outline Color1", Color) = (0, 0, 0, 1)
+        _OutlineColor2("Outline Color2", Color) = (0, 0, 0, 1)
+        _OutlineColor3("Outline Color3", Color) = (0, 0, 0, 1)
+        _OutlineColor4("Outline Color4", Color) = (0, 0, 0, 1)
+        _OutlineColor5("Outline Color5", Color) = (0.4811321, 0.1050894, 0, 1.0)
+
+        [Toggle]_TANG("是否切线", float) = 0
+        _OffsetFactor ("Offset Factor", Float) = 0.5
+        _OffsetUnits ("Offset Units", Float) = 0
 		
 		 [Toggle(ENABLE_ALPHA_CLIPPING)]_EnableAlphaClipping ("EnableAlphaClipping", Float) = 0
         _Cutoff("Cutoff", Range(0,1)) = 0.5
@@ -93,15 +103,16 @@ Shader "URP_BODY"
         #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/CommonMaterial.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+        //#include "Assets/Scripts/CustomShadowmap/CustomShadows.hlsl"
         //#include "Assets/BOXOPHOBIC/Atmospheric Height Fog/Core/Includes/AtmosphericHeightFog.cginc"
 
-        #pragma shader_feature _SHADERENUM_BASE _SHADERENUM_HAIR _SHADERENUM_FACE
+
 		#pragma multi_compile _ _MAIN_LIGHT_SHADOWS //接受阴影
         #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE //产生阴影
         #pragma multi_compile _ _SHADOWS_SOFT //软阴影  
         #pragma shader_feature _ALPHATEST_ON
-
         #pragma shader_feature _AdditionalLights
+        #pragma shader_feature _TANG_ON
 
         #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
         #pragma multi_compile_fragment _ _SHADOWS_SOFT
@@ -166,22 +177,30 @@ Shader "URP_BODY"
         half _RimOffset;
         half _RimThreshold;
         half _OutlineWidth;
-        half4 _OutlineColor;
+        half4 _OutlineColor1;
+        half4 _OutlineColor2;
+        half4 _OutlineColor3;
+        half4 _OutlineColor4;
+        half4 _OutlineColor5;
         half4 _DarkColor;
 		half _Cutoff;
+
+        float _OffsetFactor;
+        float _OffsetUnits;
+       
 		
         CBUFFER_END
 
         struct a2v{
-            float3 vertex : POSITION;       //顶点坐标
+            float4 vertex : POSITION;       //顶点坐标
             half4 color : COLOR0;           //顶点色
             half3 normal : NORMAL;          //法线
             half4 tangent : TANGENT;        //切线
             float2 texCoord : TEXCOORD0;    //纹理坐标
         };
         struct v2f{
-            float4 pos : POSITION;              //裁剪空间顶点坐标
-			//float4 positionCS : SV_POSITION;
+			float4 positionCS : SV_POSITION;     //裁剪空间顶点坐标
+
             float2 uv : TEXCOORD0;              //uv
             float3 worldPos : TEXCOORD1;        //世界坐标
             float3 worldNormal : TEXCOORD2;     //世界空间法线
@@ -190,7 +209,10 @@ Shader "URP_BODY"
             float3 positionWS : TEXCOORD6; 
             float4 positionNDC:TEXCOORD5;
             float4 shadowCoord :TEXCOORD8;
-            half4 color : COLOR0;               //平滑Rim所需顶点色
+            float fogCoord : TEXCOORD9;
+
+            float4 shadowVertex : TEXCOORD7;
+            float4 color : COLOR0;               //平滑Rim所需顶点色
         };
 		
 		
@@ -200,10 +222,16 @@ Shader "URP_BODY"
         {
             Tags {"LightMode"="UniversalForward" "RenderType"="Opaque"}
 			
-			Cull back
+			Cull off
             ZTest LEqual
             ZWrite on
             Blend One Zero
+            
+            Stencil{
+                Ref 1
+                Comp always
+                Pass replace
+            }
             
             HLSLPROGRAM
 			#pragma target 3.0
@@ -213,6 +241,7 @@ Shader "URP_BODY"
 			#pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
             
             
+            
 			
             v2f ToonPassVert(a2v v)
             {
@@ -220,7 +249,7 @@ Shader "URP_BODY"
                 VertexPositionInputs vertexInput =GetVertexPositionInputs(v.vertex.xyz);
                 o.positionWS = vertexInput.positionWS;
                 o.positionNDC = vertexInput.positionNDC;
-                o.pos = TransformObjectToHClip(v.vertex);
+                o.positionCS = TransformObjectToHClip(v.vertex);
                 o.uv = TRANSFORM_TEX(v.texCoord, _MainTex);
                 o.worldPos = TransformObjectToWorld(v.vertex);
                 // 使用URP自带函数计算世界空间法线
@@ -231,12 +260,19 @@ Shader "URP_BODY"
                 
                 
                 o.shadowCoord = TransformWorldToShadowCoord(vertexInput.positionWS);
+
+                //o.shadowVertex = mul(_ZorroShadowMatrix, float4(o.worldPos.xyz, 1.0f));
+                
                 o.color = v.color;
+                o.fogCoord = ComputeFogFactor(o.positionCS.z);
                 return o;
             }
 
-            half4 ToonPassFrag(v2f i) : SV_TARGET
+            half4 ToonPassFrag(v2f i, FRONT_FACE_TYPE isFrontFace : FRONT_FACE_SEMANTIC) : SV_TARGET
             {
+
+                i.worldNormal = IS_FRONT_VFACE(isFrontFace, i.worldNormal, -i.worldNormal);
+
                 float4 BaseColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uv) * _MainColor;
 				//float4 Rampcolor1 = _Rampcolor1;
 				#if ENABLE_ALPHA_CLIPPING
@@ -256,6 +292,7 @@ Shader "URP_BODY"
                 float4 LightMapColor = SAMPLE_TEXTURE2D(_LightMap, sampler_LightMap, i.uv);
                 Light mainLight = GetMainLight();
                 Light Light1 = GetMainLight(i.shadowCoord);
+
                 
 
 
@@ -347,13 +384,33 @@ Shader "URP_BODY"
 					float allao =halfLambert*ShadowAO;
                 //— — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — — —
 
-                half3 ambient = half3(unity_SHAr.w, unity_SHAg.w, unity_SHAb.w);
-                float shadow = MainLightRealtimeShadow(i.shadowCoord); 
-                //shadow =Light.shadowAttenuation;
-                float4 oshadow = float4(shadow,shadow,shadow,1);
-                
-                oshadow =lerp(oallramp,1,oshadow);
-               
+
+
+
+                float _DepthBias ;
+				float3 _ShadowColor ;
+
+				float3 shadowVertex = (((i.shadowVertex.xyz / i.shadowVertex.w) * 0.5) + 0.5);
+
+				shadowVertex.z = (shadowVertex.z - _DepthBias);
+			#if UNITY_REVERSED_Z //DirectX 
+				shadowVertex.z = 1 - shadowVertex.z;
+			#else
+				
+			#endif
+				
+
+				//flip Y for sample_CMP ,TODO platform dependent
+			#if UNITY_UV_STARTS_AT_TOP //DirectX
+				shadowVertex.y = 1 - shadowVertex.y;
+			#endif
+				
+				
+				float tcolor = 1;
+               //render feature中获取通道阴影贴图
+
+                float4 oshadow = 1;
+                oshadow =oallramp;
 
                 
                 
@@ -361,15 +418,15 @@ Shader "URP_BODY"
                
 
                 float4 rampColor =lerp(allramp, 1,step(_RampShadowRange, allao));
-                float4 rampColor1 =lerp(1, allramp,smoothstep(0,1, shadow)-smoothstep(0.96,1, shadow));
+                float4 rampColor1 =lerp(1, allramp,smoothstep(0,1, tcolor)-smoothstep(0.96,1, tcolor));
                
                 
 
                 //float4 FinalRamp = rampColor * BaseColor*oshadow;
                 float4  FinalRamp=0;
-                float dishadow=halfLambert;
+               
 
-                if ( shadow<allao &&_IsShadow == 1.0)//若处于阴影中
+                if ( tcolor<allao &&_IsShadow == 1.0)//若处于阴影中
                 FinalRamp =rampColor1*oshadow *BaseColor;
                 //FinalRamp =  rampColor *BaseColor * oshadow;
                 else
@@ -465,17 +522,22 @@ Shader "URP_BODY"
                 }
 
 
-                
-
-
-
 
 
                FinalColor = (_WorldLightInfluence * _MainLightColor * FinalColor + (1 - _WorldLightInfluence) * FinalColor);
 
+                float4 BaseColorback=1;
+               BaseColorback=oallramp*BaseColor;
+               FinalColor = IS_FRONT_VFACE(isFrontFace, FinalColor, BaseColorback);
+
+
+               FinalColor.rgb = MixFog(FinalColor.rgb, i.fogCoord);//混合fog
+
               
 
                 return FinalColor;
+              // return ShadowRamp1;
+              // return tcolor;
 
                 
                 
@@ -483,114 +545,130 @@ Shader "URP_BODY"
             }
             ENDHLSL
         }
-        Pass {
-            Name "back"
-            Tags{ "LightMode" = "SRPDefaultUnlit"}
-	        Cull front
-            ZTest LEqual
-            ZWrite On
-            Blend One Zero
-	        HLSLPROGRAM
-	        #pragma vertex vertback
-	        #pragma fragment frag
-			#pragma shader_feature_local_fragment ENABLE_ALPHA_CLIPPING
-             
-	          v2f vertback(a2v input) 
-              {
-                v2f o;
-                o.pos = TransformObjectToHClip(input.vertex);
-                o.uv = TRANSFORM_TEX(input.texCoord, _MainTex);
-                VertexNormalInputs vertexNormalInput = GetVertexNormalInputs(input.normal, input.tangent);
-                o.worldNormal =1- vertexNormalInput.normalWS;
-                return o;
-	     }
-	     float4 frag(v2f input) :  SV_TARGET
-        {
-            
-                 float4 BaseColorback = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv) * _MainColor;
-                 float4 LightMapColor = SAMPLE_TEXTURE2D(_LightMap, sampler_LightMap, input.uv);
-                 float rampVmove = 0.0;
-                 if (_IsNight == 0.0)
-                    rampVmove=0;
-                 else
-                    rampVmove=-0.5;
 
-                    float4 oShadowRamp1 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.95+rampVmove));
-                    float4 oShadowRamp2 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.85+rampVmove));
-                    float4 oShadowRamp3 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.75+rampVmove));
-                    float4 oShadowRamp4 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.65+rampVmove));
-                    float4 oShadowRamp5 = SAMPLE_TEXTURE2D(_RampMap, sampler_RampMap, float2(0.1, 0.55+rampVmove));
-                    float4 oAllRamps[5] = {
-                        oShadowRamp1, oShadowRamp2, oShadowRamp3, oShadowRamp4, oShadowRamp5
-                    };
-
-                    float4 ometalRamp2 = smoothstep(0.8,0.85,LightMapColor.a) * oAllRamps[_RampArea1];
-					float4 ometalRamp3 = (smoothstep(0.6,0.65,LightMapColor.a)-smoothstep(0.8,0.85,LightMapColor.a)) * oAllRamps[_RampArea2];
-					float4 ometalRamp4 = (smoothstep(0.4,0.45,LightMapColor.a)-smoothstep(0.6,0.65,LightMapColor.a))* oAllRamps[_RampArea3];
-					float4 ometalRamp5 = (smoothstep(0,0.1,LightMapColor.a)-smoothstep(0.4,0.45,LightMapColor.a))* oAllRamps[_RampArea4];
-					float4 ometalRamp6 =(1-smoothstep(0,0.1,LightMapColor.a))* oAllRamps[_RampArea5];
-
-                    float4 oallramp =ometalRamp2+ometalRamp3+ometalRamp4+ometalRamp5+ometalRamp6;
-                    BaseColorback*=oallramp;
-                
-                 return BaseColorback;
-	     }
-            ENDHLSL
-        }
-
-
-
-
-
-/*
-        
         Pass {
             Name "OutLine"
-            Tags{ "LightMode" = "SRPDefaultUnlit" }
-	         Cull front
-	         HLSLPROGRAM
-	        #pragma vertex vert  
-	         #pragma fragment frag
-			 #pragma fragment FragmentAlphaClip
-			 #pragma shader_feature_local_fragment ENABLE_ALPHA_CLIPPING
-	          v2f vert(a2v input) {
-                float4 scaledScreenParams = GetScaledScreenParams();
-                float ScaleX = abs(scaledScreenParams.x / scaledScreenParams.y);//求得X因屏幕比例缩放的倍数
-		      v2f output;
-		          VertexPositionInputs vertexInput = GetVertexPositionInputs(input.vertex.xyz);
-                VertexNormalInputs normalInput = GetVertexNormalInputs(input.normal);
-                float3 normalCS = TransformWorldToHClipDir(normalInput.normalWS);//法线转换到裁剪空间
-                float2 extendDis = normalize(normalCS.xy) *(_OutlineWidth*0.01);//根据法线和线宽计算偏移量
-                extendDis.x /=ScaleX ;//由于屏幕比例可能不是1:1，所以偏移量会被拉伸显示，根据屏幕比例把x进行修正
-                output.pos = TransformObjectToHClip(input.vertex);
-				float ctrl = clamp(5/output.pos.w,0,1);//最远描边宽度
-                #if _OLWVWD_ON
-                    //屏幕下描边宽度会变
-                    output.pos.xy +=extendDis;
-                #else
-                    //屏幕下描边宽度不变，则需要顶点偏移的距离在NDC坐标下为固定值
-                    //因为后续会转换成NDC坐标，会除w进行缩放，所以先乘一个w，那么该偏移的距离就不会在NDC下有变换
-                    output.pos.xy += extendDis * output.pos.w* ctrl*input.color.a;//顶点色控制粗细
-                #endif
-				
-                
-		      return output;
+            Tags{ "LightMode" ="COutLine"  }
+            Cull front
+            ZTest on
+            Offset [_OffsetFactor], [_OffsetUnits]
+
+            Stencil{
+                Ref 222
+                Comp always
+                Pass replace
+            }
+            //zwrite on
+         
+	    HLSLPROGRAM
+	    #pragma vertex vert  
+	    #pragma fragment frag
+	    v2f vert(a2v i) 
+        {
+		v2f output;
+		VertexPositionInputs vertexInput = GetVertexPositionInputs(i.vertex.xyz);
+
+        output.positionCS = vertexInput.positionCS;
+        output.uv = TRANSFORM_TEX(i.texCoord, _MainTex);
+        float3 fixedVerterxNormal;
+        #if _TANG_ON
+        fixedVerterxNormal= i.tangent;
+        #else
+        fixedVerterxNormal= i.normal;
+        #endif
+
+                float3 positionVS = mul(UNITY_MATRIX_MV, i.vertex).xyz;
+                float viewDepth = abs(positionVS.z);
+                float4 viewPos = mul(UNITY_MATRIX_MV,  i.vertex);
+                float4 vert = viewPos / viewPos.w;
+                float s = -(viewPos.z / unity_CameraProjection[1].y);
+                float power = pow(s, 0.5);
+                float3 viewSpaceNormal = mul(UNITY_MATRIX_IT_MV, fixedVerterxNormal);
+                viewSpaceNormal.z = 0.01;
+	            viewSpaceNormal = normalize(viewSpaceNormal);
+                float width;
+                width = power*(_OutlineWidth/100);
+              
+
+                vert.xy += viewSpaceNormal.xy *width;
+                vert = mul(UNITY_MATRIX_P, vert);
+         
+                output.positionCS.xy = vert;
+                return output;
 	     }
+         
 	     float4 frag(v2f input) : SV_Target {
-            return float4(_OutlineColor.rgb, 1);
-            
+                    float4 LightMapColor = SAMPLE_TEXTURE2D(_LightMap, sampler_LightMap, input.uv);
+               
+                    float4 metalRamp2 = smoothstep(0.8,0.85,LightMapColor.r)*_OutlineColor1;
+					float4 metalRamp3 = (smoothstep(0.6,0.65,LightMapColor.r)-smoothstep(0.8,0.85,LightMapColor.r)) *_OutlineColor2;
+					float4 metalRamp4 = (smoothstep(0.4,0.45,LightMapColor.r)-smoothstep(0.6,0.65,LightMapColor.r))*_OutlineColor3;
+					float4 metalRamp5 = (smoothstep(0,0.1,LightMapColor.r)-smoothstep(0.4,0.45,LightMapColor.r))*_OutlineColor4;
+					float4 metalRamp6 =(1-smoothstep(0,0.1,LightMapColor.r))*_OutlineColor5;
+
+                    float4 alloutlinecolor=metalRamp2+metalRamp3+metalRamp4+metalRamp5+metalRamp6;
+                    
+                 return alloutlinecolor;
 	     }
-            ENDHLSL
-        }
+	     ENDHLSL
+         }
         
-*/
+
         
+
 		Pass
-        {         
-            Tags {"LightMode" = "ShadowCaster"}
+        {
+            Tags{"LightMode"="ShadowCaster" }
+            HLSLPROGRAM
+            #pragma vertex ToonPassVert
+            #pragma fragment ToonPassFrag
 
+      
+            v2f ToonPassVert(a2v i)
+            {
+                v2f o;
+                
+                o.uv=TRANSFORM_TEX(i.texCoord,_MainTex);
+                
+                float3 WSpos=TransformObjectToWorld(i.vertex.xyz);//网格大小
+                Light MainLight=GetMainLight();
+                MainLight.shadowAttenuation=1;
+                float shadowAtten = 0;
+                float3 WSnor=TransformObjectToWorldNormal(i.normal.xyz);
+
+
+                
+
+               o.positionCS=TransformWorldToHClip(ApplyShadowBias(WSpos,WSnor,MainLight.direction));
+              
+          
+
+
+
+                #if UNITY_REVERSED_Z
+                o.positionCS.z=min(o.positionCS.z,o.positionCS.w*UNITY_NEAR_CLIP_VALUE);
+                #else
+                o.positionCS.z=max(o.positionCS.z,o.positionCS.w*UNITY_NEAR_CLIP_VALUE);
+                #endif
+                
+                return o;
+                }
+                half4 ToonPassFrag(v2f i):SV_TARGET
+                {
+                    #ifdef _CUT_ON
+                    float alpha=SAMPLE_TEXTURE2D(_MainTex,sampler_MainTex,i.uv).a;
+                    clip(alpha-_Cutoff);
+                    #endif
+                    float4 red;
+                    red=(255,1,1,0);
+                    return red;
+                }
+                    ENDHLSL
         }
+                    
 
+
+        
         Pass
         {
             Tags {"LightMode" = "DepthOnly"}
